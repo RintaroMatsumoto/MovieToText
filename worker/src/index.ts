@@ -122,13 +122,6 @@ async function fetchTranscriptFromTracks(captionTracks: any[], lang?: string): P
   return { segments: parseTranscriptXml(await response.text()), selectedLang: track.languageCode };
 }
 
-class RateLimitError extends Error {
-  constructor() {
-    super('Rate limited');
-    this.name = 'RateLimitError';
-  }
-}
-
 async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
   transcript: TranscriptSegment[];
   title: string;
@@ -148,7 +141,7 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
         videoId,
       }),
     });
-    if (!resp.ok) throw new RateLimitError();
+    if (!resp.ok) return null;
 
     const data = await resp.json();
     const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
@@ -164,9 +157,8 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
       availableLanguages,
       selectedLang,
     };
-  } catch (e) {
-    if (e instanceof Error && e.name !== 'RateLimitError') return null;
-    throw e;
+  } catch {
+    return null;
   }
 }
 
@@ -176,10 +168,6 @@ function getCORSHeaders(): Record<string, string> {
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export default {
@@ -209,27 +197,14 @@ export default {
         );
       }
 
-      try {
-        let innerTube = await fetchViaInnerTube(videoId, lang);
-        if (!innerTube) {
-          return Response.json(
-            { error: 'この動画には字幕がありません' },
-            { status: 404, headers: getCORSHeaders() }
-          );
-        }
-        return Response.json(innerTube, { headers: getCORSHeaders() });
-      } catch (err: any) {
-        console.error('Transcript fetch error:', err);
-        await sleep(1000);
-        const innerTube = await fetchViaInnerTube(videoId, lang).catch(() => null);
-        if (!innerTube) {
-          return Response.json(
-            { error: 'レート制限により字幕を取得できませんでした。しばらく時間をおいてから再試行してください。' },
-            { status: 429, headers: getCORSHeaders() }
-          );
-        }
-        return Response.json(innerTube, { headers: getCORSHeaders() });
+      const innerTube = await fetchViaInnerTube(videoId, lang);
+      if (!innerTube) {
+        return Response.json(
+          { error: '字幕は取得できませんでした' },
+          { status: 404, headers: getCORSHeaders() }
+        );
       }
+      return Response.json(innerTube, { headers: getCORSHeaders() });
     }
 
     if (url.pathname === '/api/visit') {
