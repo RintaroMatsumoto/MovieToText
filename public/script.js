@@ -152,7 +152,7 @@ function showResult() {
   elements.result.classList.remove('hidden');
 }
 
-function populateLanguageDropdown(languages) {
+function populateLanguageDropdown(languages, selectedLang) {
   const select = elements.subtitleLangSelect;
   select.innerHTML = '';
   languages.forEach(l => {
@@ -161,6 +161,7 @@ function populateLanguageDropdown(languages) {
     option.textContent = l.name;
     select.appendChild(option);
   });
+  if (selectedLang) select.value = selectedLang;
   elements.subtitleLangRow.classList.remove('hidden');
 }
 
@@ -183,7 +184,7 @@ function displayResult(data) {
   elements.summaryText.textContent = plainText;
 
   if (data.availableLanguages && !dropdownBuilt) {
-    populateLanguageDropdown(data.availableLanguages);
+    populateLanguageDropdown(data.availableLanguages, data.selectedLang);
     dropdownBuilt = true;
   }
 }
@@ -301,11 +302,11 @@ function clearUrl() {
   elements.error.classList.add('hidden');
 }
 
-elements.fetchBtn.addEventListener('click', () => fetchTranscript());
+elements.fetchBtn.addEventListener('click', () => fetchTranscript(currentLang));
 elements.pasteBtn.addEventListener('click', pasteUrl);
 elements.clearBtn.addEventListener('click', clearUrl);
 elements.urlInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') fetchTranscript();
+  if (e.key === 'Enter') fetchTranscript(currentLang);
 });
 elements.subtitleLangSelect.addEventListener('change', () => fetchTranscript(elements.subtitleLangSelect.value));
 
