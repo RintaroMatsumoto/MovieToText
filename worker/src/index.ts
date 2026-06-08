@@ -110,13 +110,8 @@ function getAvailableLanguages(captionTracks: any[]): LanguageInfo[] {
 
 async function fetchTranscriptFromTracks(captionTracks: any[], lang?: string): Promise<{ segments: TranscriptSegment[]; selectedLang: string }> {
   const track = lang
-    ? captionTracks.find((t: any) => t.languageCode === lang)
+    ? captionTracks.find((t: any) => t.languageCode === lang) || captionTracks[0]
     : captionTracks[0];
-
-  if (!track) {
-    const available = captionTracks.map((t: any) => t.languageCode).join(', ');
-    throw new Error(`言語 "${lang}" の字幕はありません。利用可能: ${available}`);
-  }
 
   const response = await fetch(track.baseUrl, {
     headers: { 'User-Agent': USER_AGENT },
