@@ -189,7 +189,6 @@ function displayResult(data) {
 async function fetchTranscript(lang) {
   const url = elements.urlInput.value.trim();
   const videoId = extractVideoId(url);
-  const subtitleLang = lang || elements.subtitleLangSelect.value;
 
   if (!videoId) {
     showError(t('invalidUrl'));
@@ -198,10 +197,11 @@ async function fetchTranscript(lang) {
 
   showLoading();
   elements.fetchBtn.disabled = true;
+  elements.subtitleLangRow.classList.add('hidden');
 
   try {
     let apiUrl = `${API_BASE}/api/transcript?id=${videoId}`;
-    if (subtitleLang) apiUrl += `&lang=${subtitleLang}`;
+    if (lang) apiUrl += `&lang=${lang}`;
 
     const response = await fetch(apiUrl);
     const data = await response.json();
