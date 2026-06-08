@@ -231,18 +231,24 @@ function downloadFile(content, filename, type) {
   URL.revokeObjectURL(url);
 }
 
+function sanitizeFilename(name) {
+  return name.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().substring(0, 100) || 'transcript';
+}
+
 function exportTXT() {
   if (!transcriptData) return;
-  downloadFile(getActiveContent(), 'transcript.txt', 'text/plain');
+  const name = videoInfo ? sanitizeFilename(videoInfo.title) : 'transcript';
+  downloadFile(getActiveContent(), `${name}.txt`, 'text/plain');
 }
 
 function exportMD() {
   if (!transcriptData || !videoInfo) return;
+  const name = sanitizeFilename(videoInfo.title);
   let md = `# ${videoInfo.title}\n\n`;
   md += `- ${currentLang === 'ja' ? 'チャンネル' : 'Channel'}: ${videoInfo.channel}\n\n`;
   md += `## ${currentLang === 'ja' ? '文字起こし' : 'Transcript'}\n\n`;
   md += getActiveContent();
-  downloadFile(md, 'transcript.md', 'text/markdown');
+  downloadFile(md, `${name}.md`, 'text/markdown');
 }
 
 async function copyToClipboard() {
