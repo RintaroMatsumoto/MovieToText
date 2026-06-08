@@ -78,10 +78,26 @@ function parseTranscriptXml(xml: string): TranscriptSegment[] {
   }));
 }
 
+const LANGUAGE_NAMES: Record<string, string> = {
+  ja: '日本語',
+  en: 'English',
+  'de-DE': 'Deutsch',
+  'pt-BR': 'Português (Brasil)',
+  'es-419': 'Español (Latinoamérica)',
+  fr: 'Français',
+  ko: '한국어',
+  'zh-Hans': '中文（简体）',
+  'zh-Hant': '中文（繁體）',
+  it: 'Italiano',
+  ru: 'Русский',
+};
+
 function getAvailableLanguages(captionTracks: any[]): LanguageInfo[] {
   return captionTracks.map((t: any) => ({
     languageCode: t.languageCode,
-    name: t.name?.simpleText || t.languageCode,
+    name: LANGUAGE_NAMES[t.languageCode]
+      || (typeof t.name === 'string' ? t.name : t.name?.simpleText)
+      || t.languageCode,
   }));
 }
 
