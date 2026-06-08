@@ -18,25 +18,32 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: clamp(14px, 4.5vw, 16px);
+}
+
 body {
   font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .container {
   max-width: 800px;
   margin: 0 auto;
-  padding: 40px 20px;
+  padding: clamp(20px, 5vw, 40px) clamp(12px, 4vw, 20px);
 }
 
 .top-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .lang-toggle {
@@ -45,14 +52,16 @@ body {
 }
 
 .lang-btn {
-  padding: 4px 12px;
-  font-size: 0.8rem;
+  padding: clamp(4px, 1.5vw, 8px) clamp(8px, 2vw, 12px);
+  font-size: clamp(0.7rem, 2.5vw, 0.8rem);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .lang-btn:hover {
@@ -65,12 +74,12 @@ body {
 }
 
 .visitor-badge {
-  font-size: 0.75rem;
+  font-size: clamp(0.65rem, 2vw, 0.75rem);
   color: var(--text-secondary);
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 20px;
-  padding: 4px 14px;
+  padding: 4px clamp(8px, 2vw, 14px);
   white-space: nowrap;
   display: flex;
   align-items: center;
@@ -83,18 +92,16 @@ body {
   gap: 2px;
   font-family: 'Courier New', Consolas, monospace;
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
   color: var(--text);
   letter-spacing: 1px;
-  perspective: 200px;
 }
 
 .drum-digit {
   display: inline-block;
-  position: relative;
-  width: 14px;
-  height: 18px;
-  line-height: 18px;
+  width: clamp(12px, 3.5vw, 14px);
+  height: clamp(16px, 4.5vw, 18px);
+  line-height: clamp(16px, 4.5vw, 18px);
   text-align: center;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -111,22 +118,22 @@ body {
 
 header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: clamp(24px, 5vw, 40px);
 }
 
 header h1 {
-  font-size: 2rem;
+  font-size: clamp(1.5rem, 6vw, 2rem);
   margin-bottom: 8px;
 }
 
 .subtitle {
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: clamp(0.85rem, 3vw, 1rem);
 }
 
 .input-section {
   background: var(--bg-secondary);
-  padding: 24px;
+  padding: clamp(16px, 3vw, 24px);
   border-radius: var(--radius);
   margin-bottom: 24px;
 }
@@ -135,6 +142,7 @@ header h1 {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
+  font-size: clamp(0.85rem, 3vw, 1rem);
 }
 
 .input-row {
@@ -144,8 +152,9 @@ header h1 {
 
 .input-row input {
   flex: 1;
-  padding: 12px 16px;
-  font-size: 1rem;
+  min-width: 0;
+  padding: clamp(10px, 2.5vw, 12px) clamp(12px, 3vw, 16px);
+  font-size: clamp(0.85rem, 3vw, 1rem);
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -163,8 +172,10 @@ header h1 {
 }
 
 .icon-btn {
-  padding: 12px;
-  font-size: 1rem;
+  padding: clamp(8px, 2vw, 12px);
+  min-width: 44px;
+  min-height: 44px;
+  font-size: clamp(0.85rem, 3vw, 1rem);
   background: var(--bg-tertiary);
   color: var(--text);
   border: 1px solid var(--border);
@@ -174,6 +185,8 @@ header h1 {
   display: flex;
   align-items: center;
   justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .icon-btn:hover {
@@ -181,8 +194,8 @@ header h1 {
 }
 
 #fetch-btn {
-  padding: 12px 24px;
-  font-size: 1rem;
+  padding: clamp(10px, 2.5vw, 12px) clamp(16px, 4vw, 24px);
+  font-size: clamp(0.85rem, 3vw, 1rem);
   font-weight: 600;
   background: var(--primary);
   color: white;
@@ -191,6 +204,9 @@ header h1 {
   cursor: pointer;
   transition: background 0.2s;
   white-space: nowrap;
+  min-height: 44px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 #fetch-btn:hover {
@@ -200,12 +216,6 @@ header h1 {
 #fetch-btn:disabled {
   background: var(--border);
   cursor: not-allowed;
-}
-
-.hint {
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
 }
 
 .loading {
@@ -233,6 +243,7 @@ header h1 {
   padding: 16px;
   border-radius: var(--radius);
   text-align: center;
+  font-size: clamp(0.85rem, 3vw, 1rem);
 }
 
 .result {
@@ -242,21 +253,23 @@ header h1 {
 }
 
 .video-info {
-  padding: 24px;
+  padding: clamp(16px, 3vw, 24px);
   border-bottom: 1px solid var(--border);
 }
 
 .video-info h2 {
-  font-size: 1.2rem;
+  font-size: clamp(1rem, 4vw, 1.2rem);
   margin-bottom: 8px;
   line-height: 1.4;
+  word-break: break-word;
 }
 
 .meta {
   display: flex;
   gap: 16px;
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+  flex-wrap: wrap;
 }
 
 .subtitle-lang-row {
@@ -264,8 +277,9 @@ header h1 {
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
-  font-size: 0.85rem;
+  font-size: clamp(0.8rem, 2.5vw, 0.85rem);
   color: var(--text-secondary);
+  flex-wrap: wrap;
 }
 
 .subtitle-lang-row select {
@@ -274,12 +288,13 @@ header h1 {
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: clamp(0.8rem, 2.5vw, 0.85rem);
   cursor: pointer;
+  max-width: 100%;
 }
 
 .transcript-section {
-  padding: 24px;
+  padding: clamp(16px, 3vw, 24px);
 }
 
 .tabs {
@@ -287,17 +302,27 @@ header h1 {
   gap: 4px;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
-  padding: 8px 16px;
-  font-size: 0.9rem;
+  padding: clamp(6px, 2vw, 8px) clamp(12px, 3vw, 16px);
+  font-size: clamp(0.8rem, 2.5vw, 0.9rem);
   background: transparent;
   color: var(--text-secondary);
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .tab:hover {
@@ -319,20 +344,20 @@ header h1 {
 
 .tab-content pre {
   background: var(--bg-tertiary);
-  padding: 16px;
+  padding: clamp(12px, 2.5vw, 16px);
   border-radius: var(--radius);
   overflow-x: auto;
   font-family: 'Courier New', Consolas, monospace;
-  font-size: 0.9rem;
+  font-size: clamp(0.8rem, 2.5vw, 0.9rem);
   line-height: 1.8;
-  max-height: 500px;
+  max-height: min(500px, 60vh);
   overflow-y: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
 }
 
 .export-section {
-  padding: 16px 24px;
+  padding: clamp(12px, 3vw, 16px) clamp(16px, 3vw, 24px);
   border-top: 1px solid var(--border);
   display: flex;
   flex-wrap: wrap;
@@ -341,14 +366,17 @@ header h1 {
 
 .export-btn,
 .copy-btn {
-  padding: 8px 16px;
-  font-size: 0.9rem;
+  padding: clamp(6px, 2vw, 8px) clamp(12px, 3vw, 16px);
+  min-height: 44px;
+  font-size: clamp(0.8rem, 2.5vw, 0.9rem);
   background: var(--bg-tertiary);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
   transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .export-btn:hover,
@@ -367,40 +395,44 @@ header h1 {
 
 footer {
   text-align: center;
-  margin-top: 40px;
+  margin-top: clamp(24px, 5vw, 40px);
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
 }
 
 .note {
   margin-top: 4px;
-  font-size: 0.8rem;
-}
-
-.counter {
-  margin-top: 12px;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
+  font-size: clamp(0.7rem, 2.5vw, 0.8rem);
 }
 
 .hidden {
   display: none !important;
 }
 
-@media (max-width: 600px) {
-  .container {
-    padding: 24px 16px;
+@media (max-width: 480px) {
+  .top-bar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  header h1 {
-    font-size: 1.5rem;
+  .visitor-badge {
+    align-self: flex-end;
   }
 
   .input-row {
-    flex-direction: column;
+    flex-wrap: wrap;
   }
 
-  .icon-btn,
+  .input-row input {
+    width: 100%;
+    flex: none;
+    order: -1;
+  }
+
+  .icon-btn {
+    flex: 1;
+  }
+
   #fetch-btn {
     width: 100%;
   }
@@ -413,5 +445,28 @@ footer {
   .copy-btn {
     width: 100%;
     margin-left: 0;
+  }
+
+  .subtitle-lang-row select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .container {
+    padding: 12px 8px;
+  }
+
+  .input-section {
+    padding: 12px;
+  }
+
+  .video-info {
+    padding: 12px;
+  }
+
+  .transcript-section {
+    padding: 12px;
   }
 }
