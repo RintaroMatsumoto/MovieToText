@@ -93,12 +93,19 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 function getAvailableLanguages(captionTracks: any[]): LanguageInfo[] {
-  return captionTracks.map((t: any) => ({
-    languageCode: t.languageCode,
-    name: LANGUAGE_NAMES[t.languageCode]
-      || (typeof t.name === 'string' ? t.name : t.name?.simpleText)
-      || t.languageCode,
-  }));
+  const seen = new Set<string>();
+  const result: LanguageInfo[] = [];
+  for (const t of captionTracks) {
+    if (seen.has(t.languageCode)) continue;
+    seen.add(t.languageCode);
+    result.push({
+      languageCode: t.languageCode,
+      name: LANGUAGE_NAMES[t.languageCode]
+        || (typeof t.name === 'string' ? t.name : t.name?.simpleText)
+        || t.languageCode,
+    });
+  }
+  return result;
 }
 
 async function fetchTranscriptFromTracks(captionTracks: any[], lang?: string): Promise<TranscriptSegment[]> {
