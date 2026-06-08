@@ -112,9 +112,16 @@ function applyLang(lang) {
 
 function updateCounterDisplay() {
   const el = document.getElementById('visitor-counter');
-  if (visitorCount !== null) {
-    el.textContent = `👁 ${t('visitors')}: ${visitorCount.toLocaleString()}`;
-  }
+  if (visitorCount === null) return;
+  const digits = String(visitorCount).split('');
+  const drumHtml = digits.map(d => `<span class="drum-digit"><span>${d}</span></span>`).join('');
+  el.innerHTML = `👁 ${t('visitors')}: <span class="counter-drum">${drumHtml}</span>`;
+  requestAnimationFrame(() => {
+    el.querySelectorAll('.drum-digit').forEach((cell, i) => {
+      cell.style.transitionDelay = `${i * 0.08}s`;
+      cell.style.transform = 'rotateX(0deg)';
+    });
+  });
 }
 
 function showLoading() {
