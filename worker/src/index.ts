@@ -1,6 +1,4 @@
-interface Env {
-  // 環境変数がある場合はここに定義
-}
+interface Env {}
 
 interface TranscriptSegment {
   text: string;
@@ -16,140 +14,185 @@ interface YouTubeResponse {
   error?: string;
 }
 
-// YouTube URLから動画IDを抽出
-function extractVideoId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-    /^([a-zA-Z0-9_-]{11})$/,
-  ];
+const RE_YOUTUBE = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36,gzip(gfe)';
+const RE_XML_TRANSCRIPT = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
 
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
+const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
+const INNERTUBE_CLIENT_VERSION = '20.10.38';
+const INNERTUBE_CONTEXT = {
+  client: {
+    clientName: 'ANDROID',
+    clientVersion: INNERTUBE_CLIENT_VERSION,
+  },
+};
+const INNERTUBE_USER_AGENT = `com.google.android.youtube/${INNERTUBE_CLIENT_VERSION} (Linux; U; Android 14)`;
+
+function extractVideoId(url: string): string | null {
+  if (url.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(url)) {
+    return url;
+  }
+  const match = url.match(RE_YOUTUBE);
+  return match ? match[1] : null;
+}
+
+function decodeEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
+}
+
+function parseTranscriptXml(xml: string, lang: string): TranscriptSegment[] {
+  const results: TranscriptSegment[] = [];
+
+  const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
+  let match;
+  while ((match = pRegex.exec(xml)) !== null) {
+    const startMs = parseInt(match[1], 10);
+    const durMs = parseInt(match[2], 10);
+    const inner = match[3];
+    let text = '';
+    const sRegex = /<s[^>]*>([^<]*)<\/s>/g;
+    let sMatch;
+    while ((sMatch = sRegex.exec(inner)) !== null) {
+      text += sMatch[1];
+    }
+    if (!text) {
+      text = inner.replace(/<[^>]+>/g, '');
+    }
+    text = decodeEntities(text).trim();
+    if (text) {
+      results.push({ text, duration: durMs, offset: startMs });
+    }
+  }
+  if (results.length > 0) return results;
+
+  const classicResults = [...xml.matchAll(RE_XML_TRANSCRIPT)];
+  return classicResults.map((r) => ({
+    text: decodeEntities(r[3]),
+    duration: parseFloat(r[2]) * 1000,
+    offset: parseFloat(r[1]) * 1000,
+  }));
+}
+
+async function fetchTranscriptFromTracks(
+  captionTracks: any[],
+  videoId: string,
+  lang?: string
+): Promise<TranscriptSegment[]> {
+  const track = lang
+    ? captionTracks.find((t: any) => t.languageCode === lang)
+    : captionTracks.find((t: any) => t.languageCode === 'ja') || captionTracks[0];
+
+  if (!track) throw new Error('指定された言語の字幕がありません');
+
+  const transcriptURL = track.baseUrl;
+
+  const response = await fetch(transcriptURL, {
+    headers: { 'User-Agent': USER_AGENT },
+  });
+
+  if (!response.ok) throw new Error('字幕データの取得に失敗しました');
+
+  const body = await response.text();
+  const resultLang = lang ?? track.languageCode;
+  return parseTranscriptXml(body, resultLang);
+}
+
+async function fetchViaInnerTube(videoId: string, lang?: string): Promise<TranscriptSegment[] | null> {
+  try {
+    const resp = await fetch(INNERTUBE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': INNERTUBE_USER_AGENT,
+      },
+      body: JSON.stringify({
+        context: INNERTUBE_CONTEXT,
+        videoId,
+      }),
+    });
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+    if (!Array.isArray(captionTracks) || captionTracks.length === 0) return null;
+
+    return fetchTranscriptFromTracks(captionTracks, videoId, lang);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchViaWebPage(videoId: string, lang?: string): Promise<TranscriptSegment[]> {
+  const videoPageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    headers: {
+      ...(lang && { 'Accept-Language': lang }),
+      'User-Agent': USER_AGENT,
+    },
+  });
+
+  const videoPageBody = await videoPageResponse.text();
+
+  if (videoPageBody.includes('class="g-recaptcha"')) {
+    throw new Error('YouTubeからのリクエストがブロックされました。しばらく待ってから再試行してください。');
+  }
+  if (!videoPageBody.includes('"playabilityStatus":')) {
+    throw new Error('この動画は利用できません');
+  }
+
+  const playerResponse = parseInlineJson(videoPageBody, 'ytInitialPlayerResponse');
+  const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+
+  if (!Array.isArray(captionTracks) || captionTracks.length === 0) {
+    throw new Error('この動画には字幕がありません');
+  }
+
+  return fetchTranscriptFromTracks(captionTracks, videoId, lang);
+}
+
+function parseInlineJson(html: string, globalName: string): any {
+  const startToken = `var ${globalName} = `;
+  const startIndex = html.indexOf(startToken);
+  if (startIndex === -1) return null;
+
+  const jsonStart = startIndex + startToken.length;
+  let depth = 0;
+  for (let i = jsonStart; i < html.length; i++) {
+    if (html[i] === '{') depth++;
+    else if (html[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(jsonStart, i + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
   }
   return null;
 }
 
-// InnerTube APIから字幕情報を取得
-async function getCaptionsInfo(videoId: string): Promise<any> {
-  const url = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
-
-  const body = {
-    context: {
-      client: {
-        clientName: 'WEB',
-        clientVersion: '2.20240101.00.00',
-      },
-    },
-    videoId: videoId,
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    throw new Error(`YouTube API error: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-// 字幕データを取得
-async function fetchTranscript(captionsUrl: string): Promise<TranscriptSegment[]> {
-  const response = await fetch(captionsUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch captions: ${response.status}`);
-  }
-
-  const text = await response.text();
-  return parseVTT(text);
-}
-
-// VTT形式を解析
-function parseVTT(vtt: string): TranscriptSegment[] {
-  const lines = vtt.split('\n');
-  const segments: TranscriptSegment[] = [];
-
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i].trim();
-    const match = line.match(/^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/);
-
-    if (match) {
-      const start = parseTimestamp(match[1]);
-      const end = parseTimestamp(match[2]);
-      i++;
-
-      const textLines: string[] = [];
-      while (i < lines.length && lines[i].trim() !== '') {
-        let text = lines[i].trim();
-        text = text.replace(/<[^>]+>/g, '');
-        if (text) textLines.push(text);
-        i++;
-      }
-
-      const text = textLines.join(' ');
-      if (text) {
-        segments.push({
-          text,
-          offset: start,
-          duration: end - start,
-        });
-      }
-    } else {
-      i++;
-    }
-  }
-
-  return segments;
-}
-
-// タイムスタンプを秒に変換
-function parseTimestamp(ts: string): number {
-  const match = ts.match(/^(\d{2}):(\d{2}):(\d{2})\.(\d{3})$/);
-  if (!match) return 0;
-
-  const hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const seconds = parseInt(match[3], 10);
-  const ms = parseInt(match[4], 10);
-
-  return hours * 3600 + minutes * 60 + seconds + ms / 1000;
-}
-
-// 動画の詳細情報を取得
-async function getVideoDetails(videoId: string): Promise<{ title: string; channel: string; duration: number }> {
-  const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-
+async function getVideoDetails(videoId: string): Promise<{ title: string; channel: string }> {
   try {
-    const response = await fetch(url);
+    const response = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
+    );
     if (response.ok) {
       const data = await response.json();
-      return {
-        title: data.title || '不明',
-        channel: data.author_name || '不明',
-        duration: 0,
-      };
+      return { title: data.title || '不明', channel: data.author_name || '不明' };
     }
-  } catch {
-    // oEmbedが失敗しても字幕取得は続行
-  }
-
-  return { title: '不明', channel: '不明', duration: 0 };
+  } catch {}
+  return { title: '不明', channel: '不明' };
 }
 
-// CORSヘッダー
 function getCORSHeaders(): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -158,19 +201,17 @@ function getCORSHeaders(): Record<string, string> {
   };
 }
 
-// メインハンドラー
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // OPTIONSリクエスト対応
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: getCORSHeaders() });
     }
 
     const url = new URL(request.url);
 
-    // APIルート
     if (url.pathname === '/api/transcript') {
       const videoIdParam = url.searchParams.get('id');
+      const lang = url.searchParams.get('lang') || undefined;
 
       if (!videoIdParam) {
         return Response.json(
@@ -188,49 +229,18 @@ export default {
       }
 
       try {
-        // 動画情報を取得
-        const [videoDetails, captionsInfo] = await Promise.all([
+        const [videoDetails, transcript] = await Promise.all([
           getVideoDetails(videoId),
-          getCaptionsInfo(videoId),
+          (async () => {
+            const innerTubeResult = await fetchViaInnerTube(videoId, lang);
+            if (innerTubeResult) return innerTubeResult;
+            return fetchViaWebPage(videoId, lang);
+          })(),
         ]);
 
-        // 字幕トラックを検索
-        const captionTracks =
-          captionsInfo?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-
-        if (!captionTracks || captionTracks.length === 0) {
-          return Response.json(
-            { error: 'この動画には字幕がありません' },
-            { status: 404, headers: getCORSHeaders() }
-          );
-        }
-
-        // 日本語字幕を優先、なければ最初の字幕を使用
-        let selectedTrack =
-          captionTracks.find((t: any) => t.languageCode === 'ja') ||
-          captionTracks[0];
-
-        let captionsUrl = selectedTrack.baseUrl;
-
-        // VTT形式を要求
-        if (!captionsUrl.includes('fmt=')) {
-          captionsUrl += '&fmt=vtt';
-        }
-
-        // 字幕を取得
-        const transcript = await fetchTranscript(captionsUrl);
-
-        // 動画の長さを取得（InnerTube APIから）
-        const duration =
-          captionsInfo?.videoDetails?.lengthSeconds
-            ? parseInt(captionsInfo.videoDetails.lengthSeconds, 10)
-            : videoDetails.duration;
-
         const result: YouTubeResponse = {
-          title: captionsInfo?.videoDetails?.title || videoDetails.title,
-          channel:
-            captionsInfo?.videoDetails?.author || videoDetails.channel,
-          duration,
+          title: videoDetails.title,
+          channel: videoDetails.channel,
           transcript,
         };
 
@@ -244,10 +254,6 @@ export default {
       }
     }
 
-    // 404
-    return Response.json(
-      { error: 'Not Found' },
-      { status: 404, headers: getCORSHeaders() }
-    );
+    return Response.json({ error: 'Not Found' }, { status: 404, headers: getCORSHeaders() });
   },
 };

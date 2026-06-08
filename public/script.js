@@ -1,4 +1,6 @@
-const API_BASE = '';  // Worker URL（デプロイ後に設定）
+const API_BASE = window.location.hostname === 'localhost'
+  ? 'http://127.0.0.1:8787'  // ローカル開発時
+  : '';  // デプロイ後は同一オリジン（WorkerをPagesに統合）
 
 const elements = {
   urlInput: document.getElementById('url-input'),
