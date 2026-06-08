@@ -32,6 +32,33 @@ body {
   padding: 40px 20px;
 }
 
+.lang-toggle {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.lang-btn {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.lang-btn:hover {
+  color: var(--text);
+}
+
+.lang-btn.active {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
 header {
   text-align: center;
   margin-bottom: 40px;
@@ -180,6 +207,25 @@ header h1 {
   gap: 16px;
   color: var(--text-secondary);
   font-size: 0.9rem;
+}
+
+.subtitle-lang-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.subtitle-lang-row select {
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
 }
 
 .transcript-section {

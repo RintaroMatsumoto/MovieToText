@@ -3,19 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MovieToText - 動画文字起こしツール</title>
+  <title data-i18n="pageTitle">SubGet - YouTube字幕取得ツール</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
+    <div class="lang-toggle">
+      <button class="lang-btn active" data-lang="ja">日本語</button>
+      <button class="lang-btn" data-lang="en">English</button>
+    </div>
+
     <header>
-      <h1>🎬 MovieToText</h1>
-      <p class="subtitle">YouTube動画のテキストを簡単に抽出</p>
+      <h1>🎬 SubGet</h1>
+      <p class="subtitle" data-i18n="subtitle">YouTube動画の字幕を簡単に取得</p>
     </header>
 
     <main>
       <div class="input-section">
-        <label for="url-input">YouTube URLを入力してください</label>
+        <label for="url-input" data-i18n="urlLabel">YouTube URLを入力してください</label>
         <div class="input-row">
           <input
             type="text"
@@ -25,31 +30,34 @@
           >
           <button id="paste-btn" type="button" class="icon-btn" title="貼り付け">📋</button>
           <button id="clear-btn" type="button" class="icon-btn" title="クリア">✕</button>
-          <button id="fetch-btn" type="button">文字起こしを取得</button>
+          <button id="fetch-btn" type="button" data-i18n="fetchBtn">字幕を取得</button>
         </div>
-        <p class="hint">対応形式: youtube.com/watch, youtu.be, /shorts/ （YouTube専用）</p>
+        <p class="hint" data-i18n="hint">対応形式: youtube.com/watch, youtu.be, /shorts/</p>
       </div>
 
       <div id="loading" class="loading hidden">
         <div class="spinner"></div>
-        <p>取得中...</p>
+        <p data-i18n="loadingText">取得中...</p>
       </div>
 
       <div id="error" class="error hidden"></div>
 
       <div id="result" class="result hidden">
         <div class="video-info">
+          <div class="subtitle-lang-row hidden" id="subtitle-lang-row">
+            <label for="subtitle-lang-select" data-i18n="subtitleLang">字幕言語:</label>
+            <select id="subtitle-lang-select"></select>
+          </div>
           <h2 id="video-title"></h2>
           <div class="meta">
             <span id="video-channel"></span>
-            <span id="video-duration"></span>
           </div>
         </div>
 
         <div class="transcript-section">
           <div class="tabs">
-            <button class="tab active" data-tab="transcript">文字起こし</button>
-            <button class="tab" data-tab="summary">整形テキスト</button>
+            <button class="tab active" data-tab="transcript" data-i18n="tabTimestamps">タイムスタンプ付き</button>
+            <button class="tab" data-tab="summary" data-i18n="tabPlain">プレーンテキスト</button>
           </div>
 
           <div id="tab-transcript" class="tab-content active">
@@ -66,15 +74,15 @@
           <button class="export-btn" data-format="srt">📥 SRT</button>
           <button class="export-btn" data-format="vtt">📥 VTT</button>
           <button class="export-btn" data-format="md">📥 Markdown</button>
-          <button class="copy-btn" id="copy-btn">📋 クリップボードにコピー</button>
+          <button class="copy-btn" id="copy-btn" data-i18n="copyBtn">📋 クリップボードにコピー</button>
         </div>
       </div>
     </main>
 
     <footer>
-      <p>YouTube動画の字幕をテキスト化する無料ツール</p>
-      <p class="note">※ 本ツールはYouTube専用です。他のプラットフォームには対応していません</p>
-      <p class="note">※ YouTubeの自動生成字幕を使用しています</p>
+      <p data-i18n="footerText">YouTube動画の字幕をテキスト化する無料ツール</p>
+      <p class="note" data-i18n="note1">※ 本ツールはYouTube専用です</p>
+      <p class="note" data-i18n="note2">※ YouTubeの自動生成字幕を使用しています</p>
       <p class="counter" id="visitor-counter"></p>
     </footer>
   </div>

@@ -8,11 +8,9 @@ interface TranscriptSegment {
   duration: number;
 }
 
-interface YouTubeResponse {
-  title?: string;
-  channel?: string;
-  transcript?: TranscriptSegment[];
-  error?: string;
+interface LanguageInfo {
+  languageCode: string;
+  name: string;
 }
 
 const RE_YOUTUBE = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
@@ -80,12 +78,22 @@ function parseTranscriptXml(xml: string): TranscriptSegment[] {
   }));
 }
 
+function getAvailableLanguages(captionTracks: any[]): LanguageInfo[] {
+  return captionTracks.map((t: any) => ({
+    languageCode: t.languageCode,
+    name: t.name?.simpleText || t.languageCode,
+  }));
+}
+
 async function fetchTranscriptFromTracks(captionTracks: any[], lang?: string): Promise<TranscriptSegment[]> {
   const track = lang
     ? captionTracks.find((t: any) => t.languageCode === lang)
     : captionTracks.find((t: any) => t.languageCode === 'ja') || captionTracks[0];
 
-  if (!track) throw new Error('指定された言語の字幕がありません');
+  if (!track) {
+    const available = captionTracks.map((t: any) => t.languageCode).join(', ');
+    throw new Error(`言語 "${lang}" の字幕はありません。利用可能: ${available}`);
+  }
 
   const response = await fetch(track.baseUrl, {
     headers: { 'User-Agent': USER_AGENT },
@@ -100,6 +108,7 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
   transcript: TranscriptSegment[];
   title: string;
   channel: string;
+  availableLanguages: LanguageInfo[];
 } | null> {
   try {
     const resp = await fetch(INNERTUBE_API_URL, {
@@ -121,12 +130,15 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
 
     const transcript = await fetchTranscriptFromTracks(captionTracks, lang);
     const details = data?.videoDetails || {};
+    const availableLanguages = getAvailableLanguages(captionTracks);
     return {
       transcript,
       title: details.title || '不明',
       channel: details.author || '不明',
+      availableLanguages,
     };
-  } catch {
+  } catch (e) {
+    if (e instanceof Error) throw e;
     return null;
   }
 }
@@ -158,6 +170,7 @@ async function fetchViaWebPage(videoId: string, lang?: string): Promise<{
   transcript: TranscriptSegment[];
   title: string;
   channel: string;
+  availableLanguages: LanguageInfo[];
 }> {
   const videoPageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
     headers: {
@@ -184,10 +197,12 @@ async function fetchViaWebPage(videoId: string, lang?: string): Promise<{
 
   const transcript = await fetchTranscriptFromTracks(captionTracks, lang);
   const details = playerResponse?.videoDetails || {};
+  const availableLanguages = getAvailableLanguages(captionTracks);
   return {
     transcript,
     title: details.title || '不明',
     channel: details.author || '不明',
+    availableLanguages,
   };
 }
 
