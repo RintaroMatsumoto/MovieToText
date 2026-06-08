@@ -171,6 +171,10 @@ function getCORSHeaders(): Record<string, string> {
   };
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -199,11 +203,15 @@ export default {
       }
 
       try {
-        const innerTube = await fetchViaInnerTube(videoId, lang);
+        let innerTube = await fetchViaInnerTube(videoId, lang);
+        if (!innerTube) {
+          await sleep(1000);
+          innerTube = await fetchViaInnerTube(videoId, lang);
+        }
         if (!innerTube) {
           return Response.json(
-            { error: 'この動画の字幕を取得できませんでした。字幕がないか、一時的に取得できない可能性があります。' },
-            { status: 404, headers: getCORSHeaders() }
+            { error: 'レート制限により字幕を取得できませんでした。しばらく時間をおいてから再試行してください。' },
+            { status: 429, headers: getCORSHeaders() }
           );
         }
         return Response.json(innerTube, { headers: getCORSHeaders() });
