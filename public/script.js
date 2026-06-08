@@ -183,9 +183,14 @@ function displayResult(data) {
   const plainText = transcriptData.map(item => item.text).join(' ');
   elements.summaryText.textContent = plainText;
 
-  if (data.availableLanguages && !dropdownBuilt) {
-    populateLanguageDropdown(data.availableLanguages, data.selectedLang);
-    dropdownBuilt = true;
+  if (data.availableLanguages) {
+    if (!dropdownBuilt) {
+      populateLanguageDropdown(data.availableLanguages, data.selectedLang);
+      dropdownBuilt = true;
+    } else {
+      if (data.selectedLang) elements.subtitleLangSelect.value = data.selectedLang;
+      elements.subtitleLangRow.classList.remove('hidden');
+    }
   }
 }
 
