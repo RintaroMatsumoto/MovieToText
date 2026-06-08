@@ -1,6 +1,6 @@
 const API_BASE = window.location.hostname === 'localhost'
   ? 'http://127.0.0.1:8787'
-  : '';
+  : 'https://movie-to-text-api.matsumotoinla.workers.dev';
 
 const elements = {
   urlInput: document.getElementById('url-input'),
