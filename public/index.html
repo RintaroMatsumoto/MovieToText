@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MovieToText - 動画文字起こしツール</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎬 MovieToText</h1>
+      <p class="subtitle">YouTube動画のテキストを簡単に抽出</p>
+    </header>
+
+    <main>
+      <div class="input-section">
+        <label for="url-input">YouTube URLを入力してください</label>
+        <div class="input-row">
+          <input
+            type="text"
+            id="url-input"
+            placeholder="https://www.youtube.com/watch?v=..."
+            autocomplete="off"
+          >
+          <button id="fetch-btn" type="button">文字起こしを取得</button>
+        </div>
+        <p class="hint">対応形式: youtube.com/watch, youtu.be, /shorts/</p>
+      </div>
+
+      <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p>取得中...</p>
+      </div>
+
+      <div id="error" class="error hidden"></div>
+
+      <div id="result" class="result hidden">
+        <div class="video-info">
+          <h2 id="video-title"></h2>
+          <div class="meta">
+            <span id="video-channel"></span>
+            <span id="video-duration"></span>
+          </div>
+        </div>
+
+        <div class="transcript-section">
+          <div class="tabs">
+            <button class="tab active" data-tab="transcript">文字起こし</button>
+            <button class="tab" data-tab="summary">整形テキスト</button>
+          </div>
+
+          <div id="tab-transcript" class="tab-content active">
+            <pre id="transcript-text"></pre>
+          </div>
+
+          <div id="tab-summary" class="tab-content">
+            <pre id="summary-text"></pre>
+          </div>
+        </div>
+
+        <div class="export-section">
+          <button class="export-btn" data-format="txt">📥 TXT</button>
+          <button class="export-btn" data-format="srt">📥 SRT</button>
+          <button class="export-btn" data-format="vtt">📥 VTT</button>
+          <button class="export-btn" data-format="md">📥 Markdown</button>
+          <button class="copy-btn" id="copy-btn">📋 クリップボードにコピー</button>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <p>YouTube動画の字幕をテキスト化する無料ツール</p>
+      <p class="note">※ YouTubeの自動生成字幕を使用しています</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
