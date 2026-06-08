@@ -281,6 +281,12 @@ footer {
   font-size: 0.8rem;
 }
 
+.counter {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
 .hidden {
   display: none !important;
 }

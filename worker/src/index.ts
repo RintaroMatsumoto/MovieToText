@@ -1,4 +1,6 @@
-interface Env {}
+interface Env {
+  VISITOR_COUNTER: KVNamespace;
+}
 
 interface TranscriptSegment {
   text: string;
@@ -239,6 +241,13 @@ export default {
           { status: 500, headers: getCORSHeaders() }
         );
       }
+    }
+
+    if (url.pathname === '/api/visit') {
+      const count = await env.VISITOR_COUNTER.get('visits');
+      const newCount = (parseInt(count || '0', 10) || 0) + 1;
+      await env.VISITOR_COUNTER.put('visits', String(newCount));
+      return Response.json({ count: newCount }, { headers: getCORSHeaders() });
     }
 
     return Response.json({ error: 'Not Found' }, { status: 404, headers: getCORSHeaders() });

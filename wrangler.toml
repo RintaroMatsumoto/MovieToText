@@ -2,5 +2,9 @@ name = "movie-to-text-api"
 main = "worker/src/index.ts"
 compatibility_date = "2024-01-01"
 
+[[kv_namespaces]]
+binding = "VISITOR_COUNTER"
+id = "92433c50bab14e7dbb9127aa9ccd50d6"
+
 [observability]
 enabled = true

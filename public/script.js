@@ -234,3 +234,13 @@ document.querySelectorAll('.export-btn').forEach(btn => {
 });
 
 elements.copyBtn.addEventListener('click', copyToClipboard);
+
+// 訪問者カウンター
+(async () => {
+  try {
+    const res = await fetch(`${API_BASE}/api/visit`);
+    const data = await res.json();
+    document.getElementById('visitor-counter').textContent =
+      `👁 訪問者数: ${data.count.toLocaleString()}`;
+  } catch {}
+})();
