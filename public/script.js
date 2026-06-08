@@ -319,7 +319,7 @@ elements.subtitleLangSelect.addEventListener('change', () => fetchTranscript(ele
 document.querySelectorAll('.lang-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     applyLang(btn.dataset.lang);
-    document.title = currentLang === 'ja' ? 'SubGet - YouTube字幕取得ツール' : 'SubGet - YouTube Subtitle Tool';
+    document.title = currentLang === 'ja' ? 'MovieToText - YouTube字幕取得ツール' : 'MovieToText - YouTube Subtitle Tool';
   });
 });
 
@@ -346,7 +346,7 @@ elements.copyBtn.addEventListener('click', copyToClipboard);
 
 const savedLang = localStorage.getItem('subget-lang') || 'ja';
 applyLang(savedLang);
-document.title = savedLang === 'ja' ? 'SubGet - YouTube字幕取得ツール' : 'SubGet - YouTube Subtitle Tool';
+document.title = savedLang === 'ja' ? 'MovieToText - YouTube字幕取得ツール' : 'MovieToText - YouTube Subtitle Tool';
 
 (async () => {
   try {
