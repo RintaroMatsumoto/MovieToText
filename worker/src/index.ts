@@ -6,11 +6,20 @@ interface TranscriptSegment {
   duration: number;
 }
 
+interface Comment {
+  author: string;
+  text: string;
+  likes: string;
+  time: string;
+}
+
 interface YouTubeResponse {
   title?: string;
   channel?: string;
   duration?: number;
+  description?: string;
   transcript?: TranscriptSegment[];
+  comments?: Comment[];
   error?: string;
 }
 
@@ -180,17 +189,132 @@ function parseInlineJson(html: string, globalName: string): any {
   return null;
 }
 
-async function getVideoDetails(videoId: string): Promise<{ title: string; channel: string }> {
+async function getVideoDetails(videoId: string): Promise<{ title: string; channel: string; description: string }> {
   try {
     const response = await fetch(
       `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
     );
     if (response.ok) {
       const data = await response.json();
-      return { title: data.title || '不明', channel: data.author_name || '不明' };
+      return {
+        title: data.title || '不明',
+        channel: data.author_name || '不明',
+        description: '',
+      };
     }
   } catch {}
-  return { title: '不明', channel: '不明' };
+  return { title: '不明', channel: '不明', description: '' };
+}
+
+// コメントのcontinuationトークンを取得
+async function getCommentToken(videoId: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: { 'User-Agent': USER_AGENT },
+    });
+    const html = await resp.text();
+
+    const match = html.match(/var ytInitialData = ({.*?});<\/script>/s);
+    if (!match) return null;
+
+    const data = JSON.parse(match[1]);
+
+    // 概要欄の取得
+    const contents = data?.contents?.twoColumnWatchNextResults?.results?.results?.contents;
+    if (!contents) return null;
+
+    for (const item of contents) {
+      if (item.itemSectionRenderer) {
+        const sectionContents = item.itemSectionRenderer.contents || [];
+        for (const sc of sectionContents) {
+          if (sc.continuationItemRenderer) {
+            const token = sc.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
+            if (token) return token;
+          }
+        }
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// コメントを取得（1ページ）
+async function fetchCommentsPage(token: string): Promise<{ comments: Comment[]; nextToken: string | null }> {
+  const resp = await fetch('https://www.youtube.com/youtubei/v1/next?prettyPrint=false', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': USER_AGENT,
+    },
+    body: JSON.stringify({
+      context: {
+        client: {
+          clientName: 'WEB',
+          clientVersion: '2.20250601.00.00',
+        },
+      },
+      continuation: token,
+    }),
+  });
+
+  if (!resp.ok) return { comments: [], nextToken: null };
+
+  const data = await resp.json();
+  const mutations = data?.frameworkUpdates?.entityBatchUpdate?.mutations || [];
+  const actions = data?.onResponseReceivedEndpoints || [];
+
+  // 次ページのトークン取得
+  let nextToken: string | null = null;
+  for (const action of actions) {
+    const items = action?.reloadContinuationItemsCommand?.continuationItems || [];
+    for (const item of items) {
+      if (item.continuationItemRenderer) {
+        nextToken = item.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token || null;
+      }
+    }
+  }
+
+  // コメントの抽出
+  const comments: Comment[] = [];
+  for (const entity of mutations) {
+    const commentPayload = entity.payload?.commentEntityPayload;
+    if (commentPayload) {
+      comments.push({
+        author: commentPayload.author?.displayName || '',
+        text: commentPayload.properties?.content?.content || '',
+        likes: commentPayload.toolbar?.likeCountNotliked || '0',
+        time: commentPayload.properties?.publishedTime || '',
+      });
+    }
+  }
+
+  return { comments, nextToken };
+}
+
+// コメントを複数ページ取得
+async function fetchAllComments(videoId: string, maxPages: number = 3): Promise<Comment[]> {
+  const token = await getCommentToken(videoId);
+  if (!token) return [];
+
+  let allComments: Comment[] = [];
+  let currentToken: string | null = token;
+  let page = 0;
+
+  while (currentToken && page < maxPages) {
+    const result = await fetchCommentsPage(currentToken);
+    allComments = allComments.concat(result.comments);
+    currentToken = result.nextToken;
+    page++;
+  }
+
+  // いいね数でソート
+  allComments.sort((a, b) => {
+    const aNum = parseInt(a.likes.replace(/[^0-9]/g, '')) || 0;
+    const bNum = parseInt(b.likes.replace(/[^0-9]/g, '')) || 0;
+    return bNum - aNum;
+  });
+
+  return allComments;
 }
 
 function getCORSHeaders(): Record<string, string> {
@@ -212,6 +336,8 @@ export default {
     if (url.pathname === '/api/transcript') {
       const videoIdParam = url.searchParams.get('id');
       const lang = url.searchParams.get('lang') || undefined;
+      const includeDescription = url.searchParams.get('description') === 'true';
+      const includeComments = url.searchParams.get('comments') === 'true';
 
       if (!videoIdParam) {
         return Response.json(
@@ -229,19 +355,31 @@ export default {
       }
 
       try {
-        const [videoDetails, transcript] = await Promise.all([
+        const promises: Promise<any>[] = [
           getVideoDetails(videoId),
           (async () => {
             const innerTubeResult = await fetchViaInnerTube(videoId, lang);
             if (innerTubeResult) return innerTubeResult;
             return fetchViaWebPage(videoId, lang);
           })(),
-        ]);
+        ];
+
+        if (includeComments) {
+          promises.push(fetchAllComments(videoId));
+        }
+
+        const results = await Promise.all(promises);
+
+        const videoDetails = results[0];
+        const transcript = results[1];
+        const comments = includeComments ? results[2] : undefined;
 
         const result: YouTubeResponse = {
           title: videoDetails.title,
           channel: videoDetails.channel,
+          description: includeDescription ? videoDetails.description : undefined,
           transcript,
+          comments,
         };
 
         return Response.json(result, { headers: getCORSHeaders() });

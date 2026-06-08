@@ -1,10 +1,11 @@
 const API_BASE = window.location.hostname === 'localhost'
-  ? 'http://127.0.0.1:8787'  // ローカル開発時
-  : '';  // デプロイ後は同一オリジン（WorkerをPagesに統合）
+  ? 'http://127.0.0.1:8787'
+  : '';
 
 const elements = {
   urlInput: document.getElementById('url-input'),
   fetchBtn: document.getElementById('fetch-btn'),
+  includeComments: document.getElementById('include-comments'),
   loading: document.getElementById('loading'),
   error: document.getElementById('error'),
   result: document.getElementById('result'),
@@ -13,19 +14,19 @@ const elements = {
   videoDuration: document.getElementById('video-duration'),
   transcriptText: document.getElementById('transcript-text'),
   summaryText: document.getElementById('summary-text'),
+  commentsText: document.getElementById('comments-text'),
   copyBtn: document.getElementById('copy-btn'),
 };
 
 let transcriptData = null;
+let commentsData = null;
 let videoInfo = null;
 
-// URLバリデーション
 function extractVideoId(url) {
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
     /^([a-zA-Z0-9_-]{11})$/
   ];
-
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) return match[1];
@@ -33,12 +34,10 @@ function extractVideoId(url) {
   return null;
 }
 
-// タイムスタンプ形式変換
 function formatTime(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
-
   if (h > 0) {
     return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
@@ -50,7 +49,6 @@ function formatTimeSRT(seconds) {
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
   const ms = Math.round((seconds % 1) * 1000);
-
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
 }
 
@@ -59,11 +57,9 @@ function formatTimeVTT(seconds) {
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
   const ms = Math.round((seconds % 1) * 1000);
-
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
 }
 
-// 表示制御
 function showLoading() {
   elements.loading.classList.remove('hidden');
   elements.error.classList.add('hidden');
@@ -83,9 +79,9 @@ function showResult() {
   elements.result.classList.remove('hidden');
 }
 
-// 結果を表示
 function displayResult(data) {
   transcriptData = data.transcript;
+  commentsData = data.comments || null;
   videoInfo = {
     title: data.title || '不明',
     channel: data.channel || '不明',
@@ -105,12 +101,22 @@ function displayResult(data) {
   // 整形テキスト（タイムスタンプなし）
   const plainText = transcriptData.map(item => item.text).join(' ');
   elements.summaryText.textContent = plainText;
+
+  // コメント表示
+  if (commentsData && commentsData.length > 0) {
+    const commentsFormatted = commentsData
+      .map(c => `--- [${c.time}] ${c.author} (${c.likes}) ---\n${c.text}`)
+      .join('\n\n');
+    elements.commentsText.textContent = commentsFormatted;
+  } else {
+    elements.commentsText.textContent = 'コメントはありません';
+  }
 }
 
-// API呼び出し
 async function fetchTranscript() {
   const url = elements.urlInput.value.trim();
   const videoId = extractVideoId(url);
+  const includeComments = elements.includeComments.checked;
 
   if (!videoId) {
     showError('有効なYouTube URLを入力してください');
@@ -121,7 +127,10 @@ async function fetchTranscript() {
   elements.fetchBtn.disabled = true;
 
   try {
-    const response = await fetch(`${API_BASE}/api/transcript?id=${videoId}`);
+    let apiUrl = `${API_BASE}/api/transcript?id=${videoId}`;
+    if (includeComments) apiUrl += '&comments=true';
+
+    const response = await fetch(apiUrl);
     const data = await response.json();
 
     if (!response.ok) {
@@ -137,7 +146,6 @@ async function fetchTranscript() {
   }
 }
 
-// ファイルダウンロード
 function downloadFile(content, filename, type) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -148,14 +156,16 @@ function downloadFile(content, filename, type) {
   URL.revokeObjectURL(url);
 }
 
-// TXTエクスポート
 function exportTXT() {
   if (!transcriptData) return;
-  const text = transcriptData.map(item => `[${formatTime(item.offset)}] ${item.text}`).join('\n');
+  let text = transcriptData.map(item => `[${formatTime(item.offset)}] ${item.text}`).join('\n');
+  if (commentsData && commentsData.length > 0) {
+    text += '\n\n--- コメント ---\n\n';
+    text += commentsData.map(c => `[${c.time}] ${c.author} (${c.likes})\n${c.text}`).join('\n\n');
+  }
   downloadFile(text, 'transcript.txt', 'text/plain');
 }
 
-// SRTエクスポート
 function exportSRT() {
   if (!transcriptData) return;
   const srt = transcriptData.map((item, i) => {
@@ -166,7 +176,6 @@ function exportSRT() {
   downloadFile(srt, 'transcript.srt', 'text/plain');
 }
 
-// VTTエクスポート
 function exportVTT() {
   if (!transcriptData) return;
   const cues = transcriptData.map(item => {
@@ -178,7 +187,6 @@ function exportVTT() {
   downloadFile(vtt, 'transcript.vtt', 'text/vtt');
 }
 
-// Markdownエクスポート
 function exportMD() {
   if (!transcriptData || !videoInfo) return;
   let md = `# ${videoInfo.title}\n\n`;
@@ -186,13 +194,20 @@ function exportMD() {
   md += `- 再生時間: ${formatTime(videoInfo.duration)}\n\n`;
   md += `## 文字起こし\n\n`;
   md += transcriptData.map(item => `**[${formatTime(item.offset)}]** ${item.text}`).join('\n\n');
+  if (commentsData && commentsData.length > 0) {
+    md += `\n\n## コメント\n\n`;
+    md += commentsData.map(c => `### ${c.author} (${c.likes}) - ${c.time}\n\n${c.text}`).join('\n\n');
+  }
   downloadFile(md, 'transcript.md', 'text/markdown');
 }
 
-// クリップボードにコピー
 async function copyToClipboard() {
   if (!transcriptData) return;
-  const text = transcriptData.map(item => `[${formatTime(item.offset)}] ${item.text}`).join('\n');
+  let text = transcriptData.map(item => `[${formatTime(item.offset)}] ${item.text}`).join('\n');
+  if (commentsData && commentsData.length > 0) {
+    text += '\n\n--- コメント ---\n\n';
+    text += commentsData.map(c => `[${c.time}] ${c.author} (${c.likes})\n${c.text}`).join('\n\n');
+  }
 
   try {
     await navigator.clipboard.writeText(text);
@@ -207,9 +222,7 @@ async function copyToClipboard() {
   }
 }
 
-// イベントリスナー
 elements.fetchBtn.addEventListener('click', fetchTranscript);
-
 elements.urlInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') fetchTranscript();
 });
