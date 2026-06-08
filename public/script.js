@@ -205,7 +205,8 @@ async function fetchTranscript(lang) {
 
   try {
     let apiUrl = `${API_BASE}/api/transcript?id=${videoId}`;
-    if (lang) apiUrl += `&lang=${lang}`;
+    const langParam = lang || currentLang;
+    if (langParam) apiUrl += `&lang=${langParam}`;
 
     const response = await fetch(apiUrl);
     const data = await response.json();
@@ -302,11 +303,11 @@ function clearUrl() {
   elements.error.classList.add('hidden');
 }
 
-elements.fetchBtn.addEventListener('click', () => fetchTranscript(currentLang));
+elements.fetchBtn.addEventListener('click', () => fetchTranscript());
 elements.pasteBtn.addEventListener('click', pasteUrl);
 elements.clearBtn.addEventListener('click', clearUrl);
 elements.urlInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') fetchTranscript(currentLang);
+  if (e.key === 'Enter') fetchTranscript();
 });
 elements.subtitleLangSelect.addEventListener('change', () => fetchTranscript(elements.subtitleLangSelect.value));
 
