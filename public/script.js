@@ -101,6 +101,9 @@ function applyLang(lang) {
     btn.classList.toggle('active', btn.dataset.lang === lang);
   });
   localStorage.setItem('subget-lang', lang);
+  document.title = lang === 'ja' ? 'MovieToText - YouTube字幕取得ツール' : 'MovieToText - YouTube Subtitle Tool';
+  document.querySelector('meta[property="og:title"]')?.setAttribute('content', document.title);
+  document.querySelector('meta[name="twitter:title"]')?.setAttribute('content', document.title);
   updateCounterDisplay();
 }
 
@@ -321,11 +324,16 @@ elements.urlInput.addEventListener('keydown', (e) => {
 });
 elements.subtitleLangSelect.addEventListener('change', () => fetchTranscript(elements.subtitleLangSelect.value));
 
+document.getElementById('share-btn')?.addEventListener('click', async () => {
+  try {
+    await navigator.share({ title: 'MovieToText', url: 'https://movie-to-text.pages.dev' });
+  } catch {
+    try { await navigator.clipboard.writeText('https://movie-to-text.pages.dev'); } catch {}
+  }
+});
+
 document.querySelectorAll('.lang-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    applyLang(btn.dataset.lang);
-    document.title = currentLang === 'ja' ? 'MovieToText - YouTube字幕取得ツール' : 'MovieToText - YouTube Subtitle Tool';
-  });
+  btn.addEventListener('click', () => applyLang(btn.dataset.lang));
 });
 
 document.querySelectorAll('.tab').forEach(tab => {
@@ -349,7 +357,6 @@ elements.copyBtn.addEventListener('click', copyToClipboard);
 
 const savedLang = localStorage.getItem('subget-lang') || 'ja';
 applyLang(savedLang);
-document.title = savedLang === 'ja' ? 'MovieToText - YouTube字幕取得ツール' : 'MovieToText - YouTube Subtitle Tool';
 
 (async () => {
   try {
