@@ -1,55 +1,57 @@
 # MovieToText
 
-YouTube動画の字幕（自動生成含む）をテキストに変換する無料Webツール。
+YouTube動画の字幕をテキストに変換する無料Webツール。
 
 ## 特徴
 
 - **完全無料・認証不要** — アカウント作成なしで即利用可能
-- **YouTube専用** — YouTube動画の字幕・コメントを取得
-- **複数出力形式** — TXT, SRT, VTT, Markdown, クリップボードコピー
-- **コメント取得** — オプションでコメントも取得・表示
+- **YouTube専用** — YouTube動画の字幕を取得
+- **日英UI切替** — 日本語/English対応
+- **複数出力形式** — TXT, Markdown, クリップボードコピー
 - **ダークテーマ** — 視覚的にも快適なUI
+- **訪問者カウンター** — フッターに表示
+
+## 技術構成
+
+- **フロントエンド**: HTML, CSS, JavaScript（Cloudflare Pages）
+- **バックエンド**: Cloudflare Workers
+- **字幕取得**: InnerTube API（ANDROID クライアント）
+- **データストア**: Cloudflare KV（訪問者カウンター）
 
 ## 対応プラットフォーム
 
 | プラットフォーム | 対応状況 |
 |-----------------|---------|
 | YouTube | ✅ 対応 |
-| Twitter/X | ❌ 非対応 |
-| TikTok | ❌ 非対応 |
-| Instagram | ❌ 非対応 |
+| その他 | ❌ 非対応（YouTube専用） |
 
 > ※ 本ツールはYouTube専用です。他のプラットフォームには対応していません。
-
-## 技術構成
-
-- **フロントエンド**: HTML, CSS, JavaScript（Cloudflare Pages）
-- **バックエンド**: Cloudflare Workers
-- **YouTube字幕取得**: InnerTube API（ANDROID クライアント）
+> ※ 一部の動画ではYouTubeのレート制限により字幕が取得できない場合があります。
 
 ## デプロイ
 
 ```bash
 # Cloudflare Workers デプロイ
-npm run deploy:worker
+npx wrangler deploy
 
 # Cloudflare Pages デプロイ
-npm run deploy:pages
+npx wrangler pages deploy public --project-name=movie-to-text --commit-dirty=true
 ```
 
 ## ローカル開発
 
 ```bash
 npm install
-npm run dev
+npx wrangler dev
 ```
 
 ## 使用方法
 
 1. YouTube動画のURLを入力
-2. 「文字起こしを取得」をクリック
-3. タブで文字起こし/整形テキスト/コメントを切り替え
-4. ボタンで形式を選んでダウンロード
+2. 「字幕を取得」をクリック
+3. タブでタイムスタンプ付き/プレーンテキストを切替
+4. プルダウンで字幕言語を変更可能
+5. ボタンで形式を選んでダウンロード
 
 ## ライセンス
 
