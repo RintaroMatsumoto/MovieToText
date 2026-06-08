@@ -49,6 +49,7 @@ let currentLang = 'ja';
 let transcriptData = null;
 let videoInfo = null;
 let visitorCount = null;
+let dropdownBuilt = false;
 
 const elements = {
   urlInput: document.getElementById('url-input'),
@@ -181,8 +182,9 @@ function displayResult(data) {
   const plainText = transcriptData.map(item => item.text).join(' ');
   elements.summaryText.textContent = plainText;
 
-  if (data.availableLanguages) {
+  if (data.availableLanguages && !dropdownBuilt) {
     populateLanguageDropdown(data.availableLanguages);
+    dropdownBuilt = true;
   }
 }
 
@@ -198,6 +200,7 @@ async function fetchTranscript(lang) {
   showLoading();
   elements.fetchBtn.disabled = true;
   elements.subtitleLangRow.classList.add('hidden');
+  if (!lang) dropdownBuilt = false;
 
   try {
     let apiUrl = `${API_BASE}/api/transcript?id=${videoId}`;
