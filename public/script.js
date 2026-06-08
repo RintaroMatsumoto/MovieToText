@@ -4,7 +4,6 @@ const API_BASE = window.location.hostname === 'localhost'
 
 const i18n = {
   ja: {
-    pageTitle: 'SubGet - YouTube字幕取得ツール',
     subtitle: 'YouTube動画の字幕を簡単に取得',
     urlLabel: 'YouTube URLを入力してください',
     fetchBtn: '字幕を取得',
@@ -14,12 +13,17 @@ const i18n = {
     tabTimestamps: 'タイムスタンプ付き',
     tabPlain: 'プレーンテキスト',
     copyBtn: '📋 クリップボードにコピー',
+    copied: '✅ コピーしました',
     footerText: 'YouTube動画の字幕をテキスト化する無料ツール',
     note1: '※ 本ツールはYouTube専用です',
     note2: '※ YouTubeの自動生成字幕を使用しています',
+    invalidUrl: '有効なYouTube URLを入力してください',
+    fetchError: '字幕の取得に失敗しました',
+    copyError: 'クリップボードへのコピーに失敗しました',
+    pasteError: 'クリップボードの読み取りに失敗しました',
+    visitors: '訪問者数',
   },
   en: {
-    pageTitle: 'SubGet - YouTube Subtitle Tool',
     subtitle: 'Easily fetch YouTube video subtitles',
     urlLabel: 'Enter YouTube URL',
     fetchBtn: 'Get Subtitles',
@@ -29,16 +33,22 @@ const i18n = {
     tabTimestamps: 'With Timestamps',
     tabPlain: 'Plain Text',
     copyBtn: '📋 Copy to Clipboard',
+    copied: '✅ Copied!',
     footerText: 'Free tool to extract YouTube subtitles',
     note1: '* This tool is for YouTube only',
     note2: '* Uses YouTube auto-generated captions',
+    invalidUrl: 'Enter a valid YouTube URL',
+    fetchError: 'Failed to fetch subtitles',
+    copyError: 'Failed to copy to clipboard',
+    pasteError: 'Failed to read clipboard',
+    visitors: 'Visitors',
   },
 };
 
 let currentLang = 'ja';
 let transcriptData = null;
 let videoInfo = null;
-let availableLanguages = [];
+let visitorCount = null;
 
 const elements = {
   urlInput: document.getElementById('url-input'),
@@ -95,15 +105,16 @@ function formatTimeVTT(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
 }
 
-let visitorCount = null;
+function t(key) {
+  return i18n[currentLang][key] || key;
+}
 
 function applyLang(lang) {
   currentLang = lang;
-  const t = i18n[lang];
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.dataset.i18n;
-    if (t[key]) el.textContent = t[key];
+    if (i18n[lang][key]) el.textContent = i18n[lang][key];
   });
   document.querySelectorAll('.lang-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.lang === lang);
@@ -115,7 +126,7 @@ function applyLang(lang) {
 function updateCounterDisplay() {
   const el = document.getElementById('visitor-counter');
   if (visitorCount !== null) {
-    el.textContent = `👁 ${currentLang === 'ja' ? '訪問者数' : 'Visitors'}: ${visitorCount.toLocaleString()}`;
+    el.textContent = `👁 ${t('visitors')}: ${visitorCount.toLocaleString()}`;
   }
 }
 
@@ -141,7 +152,6 @@ function showResult() {
 }
 
 function populateLanguageDropdown(languages) {
-  availableLanguages = languages || [];
   const select = elements.subtitleLangSelect;
   select.innerHTML = '';
   languages.forEach(l => {
@@ -155,8 +165,6 @@ function populateLanguageDropdown(languages) {
 
 function displayResult(data) {
   transcriptData = data.transcript;
-  availableLanguages = data.availableLanguages || [];
-
   videoInfo = {
     title: data.title || 'Unknown',
     channel: data.channel || 'Unknown',
@@ -173,7 +181,9 @@ function displayResult(data) {
   const plainText = transcriptData.map(item => item.text).join(' ');
   elements.summaryText.textContent = plainText;
 
-  populateLanguageDropdown(availableLanguages);
+  if (data.availableLanguages) {
+    populateLanguageDropdown(data.availableLanguages);
+  }
 }
 
 async function fetchTranscript(lang) {
@@ -182,7 +192,7 @@ async function fetchTranscript(lang) {
   const subtitleLang = lang || elements.subtitleLangSelect.value;
 
   if (!videoId) {
-    showError(currentLang === 'ja' ? '有効なYouTube URLを入力してください' : 'Enter a valid YouTube URL');
+    showError(t('invalidUrl'));
     return;
   }
 
@@ -197,7 +207,7 @@ async function fetchTranscript(lang) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to fetch subtitles');
+      throw new Error(data.error || t('fetchError'));
     }
 
     displayResult(data);
@@ -261,14 +271,14 @@ async function copyToClipboard() {
 
   try {
     await navigator.clipboard.writeText(text);
-    elements.copyBtn.textContent = currentLang === 'ja' ? '✅ コピーしました' : '✅ Copied!';
+    elements.copyBtn.textContent = t('copied');
     elements.copyBtn.classList.add('copied');
     setTimeout(() => {
-      elements.copyBtn.textContent = i18n[currentLang].copyBtn;
+      elements.copyBtn.textContent = t('copyBtn');
       elements.copyBtn.classList.remove('copied');
     }, 2000);
   } catch {
-    showError(currentLang === 'ja' ? 'コピーに失敗しました' : 'Copy failed');
+    showError(t('copyError'));
   }
 }
 
@@ -278,7 +288,7 @@ async function pasteUrl() {
     elements.urlInput.value = text;
     elements.urlInput.focus();
   } catch {
-    showError(currentLang === 'ja' ? '貼り付けに失敗しました' : 'Paste failed');
+    showError(t('pasteError'));
   }
 }
 
@@ -297,7 +307,10 @@ elements.urlInput.addEventListener('keydown', (e) => {
 elements.subtitleLangSelect.addEventListener('change', () => fetchTranscript(elements.subtitleLangSelect.value));
 
 document.querySelectorAll('.lang-btn').forEach(btn => {
-  btn.addEventListener('click', () => applyLang(btn.dataset.lang));
+  btn.addEventListener('click', () => {
+    applyLang(btn.dataset.lang);
+    document.title = currentLang === 'ja' ? 'SubGet - YouTube字幕取得ツール' : 'SubGet - YouTube Subtitle Tool';
+  });
 });
 
 document.querySelectorAll('.tab').forEach(tab => {
@@ -323,6 +336,7 @@ elements.copyBtn.addEventListener('click', copyToClipboard);
 
 const savedLang = localStorage.getItem('subget-lang') || 'ja';
 applyLang(savedLang);
+document.title = savedLang === 'ja' ? 'SubGet - YouTube字幕取得ツール' : 'SubGet - YouTube Subtitle Tool';
 
 (async () => {
   try {
