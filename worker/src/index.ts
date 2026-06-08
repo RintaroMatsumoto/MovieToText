@@ -163,71 +163,6 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
   }
 }
 
-function parseInlineJson(html: string, globalName: string): any {
-  const startToken = `var ${globalName} = `;
-  const startIndex = html.indexOf(startToken);
-  if (startIndex === -1) return null;
-
-  const jsonStart = startIndex + startToken.length;
-  let depth = 0;
-  for (let i = jsonStart; i < html.length; i++) {
-    if (html[i] === '{') depth++;
-    else if (html[i] === '}') {
-      depth--;
-      if (depth === 0) {
-        try {
-          return JSON.parse(html.slice(jsonStart, i + 1));
-        } catch {
-          return null;
-        }
-      }
-    }
-  }
-  return null;
-}
-
-async function fetchViaWebPage(videoId: string, lang?: string): Promise<{
-  transcript: TranscriptSegment[];
-  title: string;
-  channel: string;
-  availableLanguages: LanguageInfo[];
-  selectedLang: string;
-}> {
-  const videoPageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-    headers: {
-      ...(lang && { 'Accept-Language': lang }),
-      'User-Agent': USER_AGENT,
-    },
-  });
-
-  const videoPageBody = await videoPageResponse.text();
-
-  if (videoPageBody.includes('class="g-recaptcha"')) {
-    throw new Error('YouTubeからのリクエストがブロックされました。しばらく待ってから再試行してください。');
-  }
-  if (!videoPageBody.includes('"playabilityStatus":')) {
-    throw new Error('この動画は利用できません');
-  }
-
-  const playerResponse = parseInlineJson(videoPageBody, 'ytInitialPlayerResponse');
-  const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-
-  if (!Array.isArray(captionTracks) || captionTracks.length === 0) {
-    throw new Error('この動画には字幕がありません');
-  }
-
-  const { segments, selectedLang } = await fetchTranscriptFromTracks(captionTracks, lang);
-  const details = playerResponse?.videoDetails || {};
-  const availableLanguages = getAvailableLanguages(captionTracks);
-  return {
-    transcript: segments,
-    title: details.title || '不明',
-    channel: details.author || '不明',
-    availableLanguages,
-    selectedLang,
-  };
-}
-
 function getCORSHeaders(): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -265,16 +200,17 @@ export default {
 
       try {
         const innerTube = await fetchViaInnerTube(videoId, lang);
-        if (innerTube) {
-          return Response.json(innerTube, { headers: getCORSHeaders() });
+        if (!innerTube) {
+          return Response.json(
+            { error: 'この動画の字幕を取得できませんでした。字幕がないか、一時的に取得できない可能性があります。' },
+            { status: 404, headers: getCORSHeaders() }
+          );
         }
-
-        const webPage = await fetchViaWebPage(videoId, lang);
-        return Response.json(webPage, { headers: getCORSHeaders() });
+        return Response.json(innerTube, { headers: getCORSHeaders() });
       } catch (err: any) {
         console.error('Transcript fetch error:', err);
         return Response.json(
-          { error: err.message || '文字起こしの取得に失敗しました' },
+          { error: err.message || '字幕の取得に失敗しました' },
           { status: 500, headers: getCORSHeaders() }
         );
       }
