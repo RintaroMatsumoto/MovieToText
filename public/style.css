@@ -356,6 +356,34 @@ header h1 {
   word-wrap: break-word;
 }
 
+.full-description {
+  margin-bottom: 16px;
+}
+
+.desc-section {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  padding: clamp(12px, 2.5vw, 16px);
+  margin-bottom: 12px;
+}
+
+.desc-label {
+  font-size: clamp(0.7rem, 2vw, 0.8rem);
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.desc-text {
+  font-size: clamp(0.85rem, 3vw, 1rem);
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
 .export-section {
   padding: clamp(12px, 3vw, 16px) clamp(16px, 3vw, 24px);
   border-top: 1px solid var(--border);

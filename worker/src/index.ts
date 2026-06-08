@@ -154,6 +154,8 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
       transcript: segments,
       title: details.title || '不明',
       channel: details.author || '不明',
+      description: details.shortDescription || '',
+      duration: parseInt(details.lengthSeconds || '0', 10),
       availableLanguages,
       selectedLang,
     };

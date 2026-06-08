@@ -7,11 +7,10 @@ const i18n = {
     subtitle: 'YouTube動画の字幕を簡単に取得',
     urlLabel: 'YouTube URLを入力してください',
     fetchBtn: '字幕を取得',
-    hint: '対応形式: youtube.com/watch, youtu.be, /shorts/',
     loadingText: '取得中...',
     subtitleLang: '字幕言語:',
-    tabTimestamps: 'タイムスタンプ付き',
-    tabPlain: 'プレーンテキスト',
+    tabFull: 'タイトル+チャンネル+説明+字幕',
+    tabTextOnly: '字幕のみ',
     copyBtn: '📋 クリップボードにコピー',
     copied: '✅ コピーしました',
     note2: '※ YouTubeの自動生成字幕を使用しています',
@@ -26,11 +25,10 @@ const i18n = {
     subtitle: 'Easily fetch YouTube video subtitles',
     urlLabel: 'Enter YouTube URL',
     fetchBtn: 'Get Subtitles',
-    hint: 'Supports: youtube.com/watch, youtu.be, /shorts/',
     loadingText: 'Loading...',
     subtitleLang: 'Subtitle:',
-    tabTimestamps: 'With Timestamps',
-    tabPlain: 'Plain Text',
+    tabFull: 'Full (Title+Channel+Desc+Subs)',
+    tabTextOnly: 'Subtitles Only',
     copyBtn: '📋 Copy to Clipboard',
     copied: '✅ Copied!',
     note2: '* Uses YouTube auto-generated captions',
@@ -159,6 +157,7 @@ function displayResult(data) {
   videoInfo = {
     title: data.title || 'Unknown',
     channel: data.channel || 'Unknown',
+    description: data.description || '',
   };
 
   elements.videoTitle.textContent = videoInfo.title;
@@ -172,6 +171,17 @@ function displayResult(data) {
   const plainText = transcriptData.map(item => item.text).join('\n');
   elements.summaryText.textContent = plainText;
 
+  // 詳細タブ（タイトル+チャンネル+説明+字幕）
+  const descEl = document.getElementById('full-description');
+  let fullHtml = '';
+  if (videoInfo.description) {
+    fullHtml += `<div class="desc-section">
+      <div class="desc-label">${currentLang === 'ja' ? '説明' : 'Description'}</div>
+      <div class="desc-text">${escapeHtml(videoInfo.description)}</div>
+    </div>`;
+  }
+  descEl.innerHTML = fullHtml;
+
   if (data.availableLanguages) {
     if (!dropdownBuilt) {
       populateLanguageDropdown(data.availableLanguages, data.selectedLang);
@@ -181,6 +191,12 @@ function displayResult(data) {
       elements.subtitleLangRow.classList.remove('hidden');
     }
   }
+}
+
+function escapeHtml(str) {
+  const el = document.createElement('div');
+  el.textContent = str;
+  return el.innerHTML;
 }
 
 async function fetchTranscript(lang) {
@@ -218,12 +234,20 @@ async function fetchTranscript(lang) {
   }
 }
 
-function getActiveContent(withTimestamps) {
-  const isPlain = document.querySelector('.tab.active')?.dataset.tab === 'summary';
-  if (isPlain) {
-    return transcriptData.map(item => item.text).join(' ');
+function getActiveContent() {
+  const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+  if (activeTab === 'textonly') {
+    return transcriptData.map(item => item.text).join('\n');
   }
-  return transcriptData.map(item => `[${formatTime(item.offset)}] ${item.text}`).join('\n');
+  // 'full' tab
+  let content = '';
+  if (videoInfo) {
+    content += `${videoInfo.title}\n${videoInfo.channel}`;
+    if (videoInfo.description) content += `\n\n${videoInfo.description}`;
+    content += '\n\n';
+  }
+  content += transcriptData.map(item => `[${formatTime(item.offset)}] ${item.text}`).join('\n');
+  return content;
 }
 
 function downloadFile(content, filename, type) {

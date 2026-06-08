@@ -58,15 +58,16 @@
 
         <div class="transcript-section">
           <div class="tabs">
-            <button class="tab active" data-tab="transcript" data-i18n="tabTimestamps">タイムスタンプ付き</button>
-            <button class="tab" data-tab="summary" data-i18n="tabPlain">プレーンテキスト</button>
+            <button class="tab active" data-tab="full" data-i18n="tabFull">タイトル+チャンネル+説明+字幕</button>
+            <button class="tab" data-tab="textonly" data-i18n="tabTextOnly">字幕のみ</button>
           </div>
 
-          <div id="tab-transcript" class="tab-content active">
+          <div id="tab-full" class="tab-content active">
+            <div id="full-description" class="full-description"></div>
             <pre id="transcript-text"></pre>
           </div>
 
-          <div id="tab-summary" class="tab-content">
+          <div id="tab-textonly" class="tab-content">
             <pre id="summary-text"></pre>
           </div>
         </div>
