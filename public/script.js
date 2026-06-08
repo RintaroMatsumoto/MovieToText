@@ -90,22 +90,6 @@ function formatTime(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function formatTimeSRT(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const ms = Math.round((seconds % 1) * 1000);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
-}
-
-function formatTimeVTT(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const ms = Math.round((seconds % 1) * 1000);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
-}
-
 function t(key) {
   return i18n[currentLang][key] || key;
 }
@@ -229,6 +213,14 @@ async function fetchTranscript(lang) {
   }
 }
 
+function getActiveContent(withTimestamps) {
+  const isPlain = document.querySelector('.tab.active')?.dataset.tab === 'summary';
+  if (isPlain) {
+    return transcriptData.map(item => item.text).join(' ');
+  }
+  return transcriptData.map(item => `[${formatTime(item.offset)}] ${item.text}`).join('\n');
+}
+
 function downloadFile(content, filename, type) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -241,29 +233,7 @@ function downloadFile(content, filename, type) {
 
 function exportTXT() {
   if (!transcriptData) return;
-  const text = transcriptData.map(item => `[${formatTime(item.offset)}] ${item.text}`).join('\n');
-  downloadFile(text, 'transcript.txt', 'text/plain');
-}
-
-function exportSRT() {
-  if (!transcriptData) return;
-  const srt = transcriptData.map((item, i) => {
-    const start = formatTimeSRT(item.offset);
-    const end = formatTimeSRT(item.offset + item.duration);
-    return `${i + 1}\n${start} --> ${end}\n${item.text}`;
-  }).join('\n\n');
-  downloadFile(srt, 'transcript.srt', 'text/plain');
-}
-
-function exportVTT() {
-  if (!transcriptData) return;
-  const cues = transcriptData.map(item => {
-    const start = formatTimeVTT(item.offset);
-    const end = formatTimeVTT(item.offset + item.duration);
-    return `${start} --> ${end}\n${item.text}`;
-  }).join('\n\n');
-  const vtt = `WEBVTT\n\n${cues}`;
-  downloadFile(vtt, 'transcript.vtt', 'text/vtt');
+  downloadFile(getActiveContent(), 'transcript.txt', 'text/plain');
 }
 
 function exportMD() {
@@ -271,13 +241,13 @@ function exportMD() {
   let md = `# ${videoInfo.title}\n\n`;
   md += `- ${currentLang === 'ja' ? 'チャンネル' : 'Channel'}: ${videoInfo.channel}\n\n`;
   md += `## ${currentLang === 'ja' ? '文字起こし' : 'Transcript'}\n\n`;
-  md += transcriptData.map(item => `**[${formatTime(item.offset)}]** ${item.text}`).join('\n\n');
+  md += getActiveContent();
   downloadFile(md, 'transcript.md', 'text/markdown');
 }
 
 async function copyToClipboard() {
   if (!transcriptData) return;
-  const text = transcriptData.map(item => `[${formatTime(item.offset)}] ${item.text}`).join('\n');
+  const text = getActiveContent();
 
   try {
     await navigator.clipboard.writeText(text);
@@ -336,8 +306,6 @@ document.querySelectorAll('.export-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const format = btn.dataset.format;
     if (format === 'txt') exportTXT();
-    else if (format === 'srt') exportSRT();
-    else if (format === 'vtt') exportVTT();
     else if (format === 'md') exportMD();
   });
 });
