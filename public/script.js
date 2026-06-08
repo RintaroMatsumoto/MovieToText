@@ -95,6 +95,8 @@ function formatTimeVTT(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
 }
 
+let visitorCount = null;
+
 function applyLang(lang) {
   currentLang = lang;
   const t = i18n[lang];
@@ -107,6 +109,14 @@ function applyLang(lang) {
     btn.classList.toggle('active', btn.dataset.lang === lang);
   });
   localStorage.setItem('subget-lang', lang);
+  updateCounterDisplay();
+}
+
+function updateCounterDisplay() {
+  const el = document.getElementById('visitor-counter');
+  if (visitorCount !== null) {
+    el.textContent = `👁 ${currentLang === 'ja' ? '訪問者数' : 'Visitors'}: ${visitorCount.toLocaleString()}`;
+  }
 }
 
 function showLoading() {
@@ -318,7 +328,7 @@ applyLang(savedLang);
   try {
     const res = await fetch(`${API_BASE}/api/visit`);
     const data = await res.json();
-    document.getElementById('visitor-counter').textContent =
-      `👁 ${currentLang === 'ja' ? '訪問者数' : 'Visitors'}: ${data.count.toLocaleString()}`;
+    visitorCount = data.count;
+    updateCounterDisplay();
   } catch {}
 })();
