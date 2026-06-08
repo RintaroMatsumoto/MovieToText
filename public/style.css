@@ -85,6 +85,24 @@ header h1 {
   color: var(--text-secondary);
 }
 
+.icon-btn {
+  padding: 12px;
+  font-size: 1rem;
+  background: var(--bg-tertiary);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn:hover {
+  background: var(--border);
+}
+
 #fetch-btn {
   padding: 12px 24px;
   font-size: 1rem;
@@ -111,33 +129,6 @@ header h1 {
   margin-top: 8px;
   font-size: 0.85rem;
   color: var(--text-secondary);
-}
-
-.options {
-  margin-top: 12px;
-  display: flex;
-  gap: 16px;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-}
-
-.checkbox-label:hover {
-  color: var(--text);
-}
-
-.checkbox-label input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--primary);
-  cursor: pointer;
 }
 
 .loading {
@@ -307,6 +298,7 @@ footer {
     flex-direction: column;
   }
 
+  .icon-btn,
   #fetch-btn {
     width: 100%;
   }

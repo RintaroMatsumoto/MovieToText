@@ -6,20 +6,12 @@ interface TranscriptSegment {
   duration: number;
 }
 
-interface Comment {
-  author: string;
-  text: string;
-  likes: string;
-  time: string;
-}
-
 interface YouTubeResponse {
   title?: string;
   channel?: string;
   duration?: number;
   description?: string;
   transcript?: TranscriptSegment[];
-  comments?: Comment[];
   error?: string;
 }
 
@@ -158,36 +150,7 @@ function parseInlineJson(html: string, globalName: string): any {
   return null;
 }
 
-interface WebPageData {
-  captionTracks: any[];
-  commentToken: string | null;
-}
-
-function extractCommentToken(html: string): string | null {
-  const match = html.match(/var ytInitialData = ({.*?});<\/script>/s);
-  if (!match) return null;
-
-  try {
-    const data = JSON.parse(match[1]);
-    const contents = data?.contents?.twoColumnWatchNextResults?.results?.results?.contents;
-    if (!contents) return null;
-
-    for (const item of contents) {
-      if (item.itemSectionRenderer) {
-        const sectionContents = item.itemSectionRenderer.contents || [];
-        for (const sc of sectionContents) {
-          if (sc.continuationItemRenderer) {
-            const token = sc.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
-            if (token) return token;
-          }
-        }
-      }
-    }
-  } catch {}
-  return null;
-}
-
-async function fetchWebPageData(videoId: string, lang?: string): Promise<WebPageData> {
+async function fetchViaWebPage(videoId: string, lang?: string): Promise<TranscriptSegment[]> {
   const videoPageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
     headers: {
       ...(lang && { 'Accept-Language': lang }),
@@ -205,10 +168,13 @@ async function fetchWebPageData(videoId: string, lang?: string): Promise<WebPage
   }
 
   const playerResponse = parseInlineJson(videoPageBody, 'ytInitialPlayerResponse');
-  const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-  const commentToken = extractCommentToken(videoPageBody);
+  const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
 
-  return { captionTracks, commentToken };
+  if (!Array.isArray(captionTracks) || captionTracks.length === 0) {
+    throw new Error('この動画には字幕がありません');
+  }
+
+  return fetchTranscriptFromTracks(captionTracks, lang);
 }
 
 async function getVideoDetails(videoId: string): Promise<{ title: string; channel: string; description: string }> {
@@ -226,77 +192,6 @@ async function getVideoDetails(videoId: string): Promise<{ title: string; channe
     }
   } catch {}
   return { title: '不明', channel: '不明', description: '' };
-}
-
-async function fetchCommentsPage(token: string): Promise<{ comments: Comment[]; nextToken: string | null }> {
-  const resp = await fetch('https://www.youtube.com/youtubei/v1/next?prettyPrint=false', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': USER_AGENT,
-    },
-    body: JSON.stringify({
-      context: {
-        client: {
-          clientName: 'WEB',
-          clientVersion: '2.20250601.00.00',
-        },
-      },
-      continuation: token,
-    }),
-  });
-
-  if (!resp.ok) return { comments: [], nextToken: null };
-
-  const data = await resp.json();
-  const mutations = data?.frameworkUpdates?.entityBatchUpdate?.mutations || [];
-  const actions = data?.onResponseReceivedEndpoints || [];
-
-  let nextToken: string | null = null;
-  for (const action of actions) {
-    const items = action?.reloadContinuationItemsCommand?.continuationItems || [];
-    for (const item of items) {
-      if (item.continuationItemRenderer) {
-        nextToken = item.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token || null;
-      }
-    }
-  }
-
-  const comments: Comment[] = [];
-  for (const entity of mutations) {
-    const commentPayload = entity.payload?.commentEntityPayload;
-    if (commentPayload) {
-      comments.push({
-        author: commentPayload.author?.displayName || '',
-        text: commentPayload.properties?.content?.content || '',
-        likes: commentPayload.toolbar?.likeCountNotliked || '0',
-        time: commentPayload.properties?.publishedTime || '',
-      });
-    }
-  }
-
-  return { comments, nextToken };
-}
-
-async function fetchAllCommentsFromToken(token: string, maxPages: number = 3): Promise<Comment[]> {
-  let allComments: Comment[] = [];
-  let currentToken: string | null = token;
-  let page = 0;
-
-  while (currentToken && page < maxPages) {
-    const result = await fetchCommentsPage(currentToken);
-    allComments = allComments.concat(result.comments);
-    currentToken = result.nextToken;
-    page++;
-  }
-
-  allComments.sort((a, b) => {
-    const aNum = parseInt(a.likes.replace(/[^0-9]/g, '')) || 0;
-    const bNum = parseInt(b.likes.replace(/[^0-9]/g, '')) || 0;
-    return bNum - aNum;
-  });
-
-  return allComments;
 }
 
 function getCORSHeaders(): Record<string, string> {
@@ -319,7 +214,6 @@ export default {
       const videoIdParam = url.searchParams.get('id');
       const lang = url.searchParams.get('lang') || undefined;
       const includeDescription = url.searchParams.get('description') === 'true';
-      const includeComments = url.searchParams.get('comments') === 'true';
 
       if (!videoIdParam) {
         return Response.json(
@@ -339,46 +233,14 @@ export default {
       try {
         const videoDetails = await getVideoDetails(videoId);
 
-        let transcript: TranscriptSegment[] | null = null;
-        let commentToken: string | null = null;
-        let comments: Comment[] | undefined;
-
         const innerTubeResult = await fetchViaInnerTube(videoId, lang);
-
-        if (innerTubeResult) {
-          transcript = innerTubeResult;
-          if (includeComments) {
-            try {
-              const webData = await fetchWebPageData(videoId, lang);
-              commentToken = webData.commentToken;
-            } catch {
-              commentToken = null;
-            }
-          }
-        } else {
-          const webData = await fetchWebPageData(videoId, lang);
-          if (webData.captionTracks.length > 0) {
-            transcript = await fetchTranscriptFromTracks(webData.captionTracks, lang);
-          } else {
-            throw new Error('この動画には字幕がありません');
-          }
-          commentToken = webData.commentToken;
-        }
-
-        if (includeComments && commentToken) {
-          try {
-            comments = await fetchAllCommentsFromToken(commentToken);
-          } catch {
-            comments = [];
-          }
-        }
+        const transcript = innerTubeResult || await fetchViaWebPage(videoId, lang);
 
         const result: YouTubeResponse = {
           title: videoDetails.title,
           channel: videoDetails.channel,
           description: includeDescription ? videoDetails.description : undefined,
-          transcript: transcript || undefined,
-          comments,
+          transcript,
         };
 
         return Response.json(result, { headers: getCORSHeaders() });
