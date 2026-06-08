@@ -164,7 +164,7 @@ function displayResult(data) {
     .join('\n');
   elements.transcriptText.textContent = transcriptWithTimestamps;
 
-  const plainText = transcriptData.map(item => item.text).join(' ');
+  const plainText = transcriptData.map(item => item.text).join('\n');
   elements.summaryText.textContent = plainText;
 
   if (data.availableLanguages) {
