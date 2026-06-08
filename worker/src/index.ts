@@ -9,17 +9,13 @@ interface TranscriptSegment {
 interface YouTubeResponse {
   title?: string;
   channel?: string;
-  duration?: number;
-  description?: string;
   transcript?: TranscriptSegment[];
   error?: string;
 }
 
 const RE_YOUTUBE = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
-const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36,gzip(gfe)';
-const RE_XML_TRANSCRIPT = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
-
-const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false&key=AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w';
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36,gzip(gfe)';
+const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
 const INNERTUBE_CLIENT_VERSION = '20.10.38';
 const INNERTUBE_CONTEXT = {
   client: {
@@ -74,7 +70,7 @@ function parseTranscriptXml(xml: string): TranscriptSegment[] {
   }
   if (results.length > 0) return results;
 
-  const classicResults = [...xml.matchAll(RE_XML_TRANSCRIPT)];
+  const classicResults = [...xml.matchAll(/<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g)];
   return classicResults.map((r) => ({
     text: decodeEntities(r[3]),
     duration: parseFloat(r[2]) * 1000,
@@ -82,10 +78,7 @@ function parseTranscriptXml(xml: string): TranscriptSegment[] {
   }));
 }
 
-async function fetchTranscriptFromTracks(
-  captionTracks: any[],
-  lang?: string
-): Promise<TranscriptSegment[]> {
+async function fetchTranscriptFromTracks(captionTracks: any[], lang?: string): Promise<TranscriptSegment[]> {
   const track = lang
     ? captionTracks.find((t: any) => t.languageCode === lang)
     : captionTracks.find((t: any) => t.languageCode === 'ja') || captionTracks[0];
@@ -98,19 +91,20 @@ async function fetchTranscriptFromTracks(
 
   if (!response.ok) throw new Error('字幕データの取得に失敗しました');
 
-  const body = await response.text();
-  return parseTranscriptXml(body);
+  return parseTranscriptXml(await response.text());
 }
 
-async function fetchViaInnerTube(videoId: string, lang?: string): Promise<TranscriptSegment[] | null> {
+async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
+  transcript: TranscriptSegment[];
+  title: string;
+  channel: string;
+} | null> {
   try {
     const resp = await fetch(INNERTUBE_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': INNERTUBE_USER_AGENT,
-        'X-YouTube-Client-Name': '3',
-        'X-YouTube-Client-Version': INNERTUBE_CLIENT_VERSION,
       },
       body: JSON.stringify({
         context: INNERTUBE_CONTEXT,
@@ -123,7 +117,13 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<Transc
     const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
     if (!Array.isArray(captionTracks) || captionTracks.length === 0) return null;
 
-    return fetchTranscriptFromTracks(captionTracks, lang);
+    const transcript = await fetchTranscriptFromTracks(captionTracks, lang);
+    const details = data?.videoDetails || {};
+    return {
+      transcript,
+      title: details.title || '不明',
+      channel: details.author || '不明',
+    };
   } catch {
     return null;
   }
@@ -152,7 +152,11 @@ function parseInlineJson(html: string, globalName: string): any {
   return null;
 }
 
-async function fetchViaWebPage(videoId: string, lang?: string): Promise<TranscriptSegment[]> {
+async function fetchViaWebPage(videoId: string, lang?: string): Promise<{
+  transcript: TranscriptSegment[];
+  title: string;
+  channel: string;
+}> {
   const videoPageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
     headers: {
       ...(lang && { 'Accept-Language': lang }),
@@ -176,24 +180,13 @@ async function fetchViaWebPage(videoId: string, lang?: string): Promise<Transcri
     throw new Error('この動画には字幕がありません');
   }
 
-  return fetchTranscriptFromTracks(captionTracks, lang);
-}
-
-async function getVideoDetails(videoId: string): Promise<{ title: string; channel: string; description: string }> {
-  try {
-    const response = await fetch(
-      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
-    );
-    if (response.ok) {
-      const data = await response.json();
-      return {
-        title: data.title || '不明',
-        channel: data.author_name || '不明',
-        description: '',
-      };
-    }
-  } catch {}
-  return { title: '不明', channel: '不明', description: '' };
+  const transcript = await fetchTranscriptFromTracks(captionTracks, lang);
+  const details = playerResponse?.videoDetails || {};
+  return {
+    transcript,
+    title: details.title || '不明',
+    channel: details.author || '不明',
+  };
 }
 
 function getCORSHeaders(): Record<string, string> {
@@ -215,7 +208,6 @@ export default {
     if (url.pathname === '/api/transcript') {
       const videoIdParam = url.searchParams.get('id');
       const lang = url.searchParams.get('lang') || undefined;
-      const includeDescription = url.searchParams.get('description') === 'true';
 
       if (!videoIdParam) {
         return Response.json(
@@ -233,19 +225,13 @@ export default {
       }
 
       try {
-        const videoDetails = await getVideoDetails(videoId);
+        const innerTube = await fetchViaInnerTube(videoId, lang);
+        if (innerTube) {
+          return Response.json(innerTube, { headers: getCORSHeaders() });
+        }
 
-        const innerTubeResult = await fetchViaInnerTube(videoId, lang);
-        const transcript = innerTubeResult || await fetchViaWebPage(videoId, lang);
-
-        const result: YouTubeResponse = {
-          title: videoDetails.title,
-          channel: videoDetails.channel,
-          description: includeDescription ? videoDetails.description : undefined,
-          transcript,
-        };
-
-        return Response.json(result, { headers: getCORSHeaders() });
+        const webPage = await fetchViaWebPage(videoId, lang);
+        return Response.json(webPage, { headers: getCORSHeaders() });
       } catch (err: any) {
         console.error('Transcript fetch error:', err);
         return Response.json(
