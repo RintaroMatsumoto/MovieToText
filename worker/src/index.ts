@@ -57,7 +57,7 @@ function decodeEntities(text: string): string {
     .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
 }
 
-function parseTranscriptXml(xml: string, lang: string): TranscriptSegment[] {
+function parseTranscriptXml(xml: string): TranscriptSegment[] {
   const results: TranscriptSegment[] = [];
 
   const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
@@ -92,7 +92,6 @@ function parseTranscriptXml(xml: string, lang: string): TranscriptSegment[] {
 
 async function fetchTranscriptFromTracks(
   captionTracks: any[],
-  videoId: string,
   lang?: string
 ): Promise<TranscriptSegment[]> {
   const track = lang
@@ -101,17 +100,14 @@ async function fetchTranscriptFromTracks(
 
   if (!track) throw new Error('指定された言語の字幕がありません');
 
-  const transcriptURL = track.baseUrl;
-
-  const response = await fetch(transcriptURL, {
+  const response = await fetch(track.baseUrl, {
     headers: { 'User-Agent': USER_AGENT },
   });
 
   if (!response.ok) throw new Error('字幕データの取得に失敗しました');
 
   const body = await response.text();
-  const resultLang = lang ?? track.languageCode;
-  return parseTranscriptXml(body, resultLang);
+  return parseTranscriptXml(body);
 }
 
 async function fetchViaInnerTube(videoId: string, lang?: string): Promise<TranscriptSegment[] | null> {
@@ -133,37 +129,10 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<Transc
     const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
     if (!Array.isArray(captionTracks) || captionTracks.length === 0) return null;
 
-    return fetchTranscriptFromTracks(captionTracks, videoId, lang);
+    return fetchTranscriptFromTracks(captionTracks, lang);
   } catch {
     return null;
   }
-}
-
-async function fetchViaWebPage(videoId: string, lang?: string): Promise<TranscriptSegment[]> {
-  const videoPageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-    headers: {
-      ...(lang && { 'Accept-Language': lang }),
-      'User-Agent': USER_AGENT,
-    },
-  });
-
-  const videoPageBody = await videoPageResponse.text();
-
-  if (videoPageBody.includes('class="g-recaptcha"')) {
-    throw new Error('YouTubeからのリクエストがブロックされました。しばらく待ってから再試行してください。');
-  }
-  if (!videoPageBody.includes('"playabilityStatus":')) {
-    throw new Error('この動画は利用できません');
-  }
-
-  const playerResponse = parseInlineJson(videoPageBody, 'ytInitialPlayerResponse');
-  const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-
-  if (!Array.isArray(captionTracks) || captionTracks.length === 0) {
-    throw new Error('この動画には字幕がありません');
-  }
-
-  return fetchTranscriptFromTracks(captionTracks, videoId, lang);
 }
 
 function parseInlineJson(html: string, globalName: string): any {
@@ -189,37 +158,17 @@ function parseInlineJson(html: string, globalName: string): any {
   return null;
 }
 
-async function getVideoDetails(videoId: string): Promise<{ title: string; channel: string; description: string }> {
-  try {
-    const response = await fetch(
-      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
-    );
-    if (response.ok) {
-      const data = await response.json();
-      return {
-        title: data.title || '不明',
-        channel: data.author_name || '不明',
-        description: '',
-      };
-    }
-  } catch {}
-  return { title: '不明', channel: '不明', description: '' };
+interface WebPageData {
+  captionTracks: any[];
+  commentToken: string | null;
 }
 
-// コメントのcontinuationトークンを取得
-async function getCommentToken(videoId: string): Promise<string | null> {
+function extractCommentToken(html: string): string | null {
+  const match = html.match(/var ytInitialData = ({.*?});<\/script>/s);
+  if (!match) return null;
+
   try {
-    const resp = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: { 'User-Agent': USER_AGENT },
-    });
-    const html = await resp.text();
-
-    const match = html.match(/var ytInitialData = ({.*?});<\/script>/s);
-    if (!match) return null;
-
     const data = JSON.parse(match[1]);
-
-    // 概要欄の取得
     const contents = data?.contents?.twoColumnWatchNextResults?.results?.results?.contents;
     if (!contents) return null;
 
@@ -238,7 +187,47 @@ async function getCommentToken(videoId: string): Promise<string | null> {
   return null;
 }
 
-// コメントを取得（1ページ）
+async function fetchWebPageData(videoId: string, lang?: string): Promise<WebPageData> {
+  const videoPageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    headers: {
+      ...(lang && { 'Accept-Language': lang }),
+      'User-Agent': USER_AGENT,
+    },
+  });
+
+  const videoPageBody = await videoPageResponse.text();
+
+  if (videoPageBody.includes('class="g-recaptcha"')) {
+    throw new Error('YouTubeからのリクエストがブロックされました。しばらく待ってから再試行してください。');
+  }
+  if (!videoPageBody.includes('"playabilityStatus":')) {
+    throw new Error('この動画は利用できません');
+  }
+
+  const playerResponse = parseInlineJson(videoPageBody, 'ytInitialPlayerResponse');
+  const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+  const commentToken = extractCommentToken(videoPageBody);
+
+  return { captionTracks, commentToken };
+}
+
+async function getVideoDetails(videoId: string): Promise<{ title: string; channel: string; description: string }> {
+  try {
+    const response = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
+    );
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        title: data.title || '不明',
+        channel: data.author_name || '不明',
+        description: '',
+      };
+    }
+  } catch {}
+  return { title: '不明', channel: '不明', description: '' };
+}
+
 async function fetchCommentsPage(token: string): Promise<{ comments: Comment[]; nextToken: string | null }> {
   const resp = await fetch('https://www.youtube.com/youtubei/v1/next?prettyPrint=false', {
     method: 'POST',
@@ -263,7 +252,6 @@ async function fetchCommentsPage(token: string): Promise<{ comments: Comment[]; 
   const mutations = data?.frameworkUpdates?.entityBatchUpdate?.mutations || [];
   const actions = data?.onResponseReceivedEndpoints || [];
 
-  // 次ページのトークン取得
   let nextToken: string | null = null;
   for (const action of actions) {
     const items = action?.reloadContinuationItemsCommand?.continuationItems || [];
@@ -274,7 +262,6 @@ async function fetchCommentsPage(token: string): Promise<{ comments: Comment[]; 
     }
   }
 
-  // コメントの抽出
   const comments: Comment[] = [];
   for (const entity of mutations) {
     const commentPayload = entity.payload?.commentEntityPayload;
@@ -291,11 +278,7 @@ async function fetchCommentsPage(token: string): Promise<{ comments: Comment[]; 
   return { comments, nextToken };
 }
 
-// コメントを複数ページ取得
-async function fetchAllComments(videoId: string, maxPages: number = 3): Promise<Comment[]> {
-  const token = await getCommentToken(videoId);
-  if (!token) return [];
-
+async function fetchAllCommentsFromToken(token: string, maxPages: number = 3): Promise<Comment[]> {
   let allComments: Comment[] = [];
   let currentToken: string | null = token;
   let page = 0;
@@ -307,7 +290,6 @@ async function fetchAllComments(videoId: string, maxPages: number = 3): Promise<
     page++;
   }
 
-  // いいね数でソート
   allComments.sort((a, b) => {
     const aNum = parseInt(a.likes.replace(/[^0-9]/g, '')) || 0;
     const bNum = parseInt(b.likes.replace(/[^0-9]/g, '')) || 0;
@@ -355,30 +337,47 @@ export default {
       }
 
       try {
-        const promises: Promise<any>[] = [
-          getVideoDetails(videoId),
-          (async () => {
-            const innerTubeResult = await fetchViaInnerTube(videoId, lang);
-            if (innerTubeResult) return innerTubeResult;
-            return fetchViaWebPage(videoId, lang);
-          })(),
-        ];
+        const videoDetails = await getVideoDetails(videoId);
 
-        if (includeComments) {
-          promises.push(fetchAllComments(videoId));
+        let transcript: TranscriptSegment[] | null = null;
+        let commentToken: string | null = null;
+        let comments: Comment[] | undefined;
+
+        const innerTubeResult = await fetchViaInnerTube(videoId, lang);
+
+        if (innerTubeResult) {
+          transcript = innerTubeResult;
+          if (includeComments) {
+            try {
+              const webData = await fetchWebPageData(videoId, lang);
+              commentToken = webData.commentToken;
+            } catch {
+              commentToken = null;
+            }
+          }
+        } else {
+          const webData = await fetchWebPageData(videoId, lang);
+          if (webData.captionTracks.length > 0) {
+            transcript = await fetchTranscriptFromTracks(webData.captionTracks, lang);
+          } else {
+            throw new Error('この動画には字幕がありません');
+          }
+          commentToken = webData.commentToken;
         }
 
-        const results = await Promise.all(promises);
-
-        const videoDetails = results[0];
-        const transcript = results[1];
-        const comments = includeComments ? results[2] : undefined;
+        if (includeComments && commentToken) {
+          try {
+            comments = await fetchAllCommentsFromToken(commentToken);
+          } catch {
+            comments = [];
+          }
+        }
 
         const result: YouTubeResponse = {
           title: videoDetails.title,
           channel: videoDetails.channel,
           description: includeDescription ? videoDetails.description : undefined,
-          transcript,
+          transcript: transcript || undefined,
           comments,
         };
 
