@@ -122,6 +122,13 @@ async function fetchTranscriptFromTracks(captionTracks: any[], lang?: string): P
   return { segments: parseTranscriptXml(await response.text()), selectedLang: track.languageCode };
 }
 
+class RateLimitError extends Error {
+  constructor() {
+    super('Rate limited');
+    this.name = 'RateLimitError';
+  }
+}
+
 async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
   transcript: TranscriptSegment[];
   title: string;
@@ -141,7 +148,7 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
         videoId,
       }),
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) throw new RateLimitError();
 
     const data = await resp.json();
     const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
@@ -158,8 +165,8 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<{
       selectedLang,
     };
   } catch (e) {
-    if (e instanceof Error) throw e;
-    return null;
+    if (e instanceof Error && e.name !== 'RateLimitError') return null;
+    throw e;
   }
 }
 
@@ -205,9 +212,16 @@ export default {
       try {
         let innerTube = await fetchViaInnerTube(videoId, lang);
         if (!innerTube) {
-          await sleep(1000);
-          innerTube = await fetchViaInnerTube(videoId, lang);
+          return Response.json(
+            { error: 'この動画には字幕がありません' },
+            { status: 404, headers: getCORSHeaders() }
+          );
         }
+        return Response.json(innerTube, { headers: getCORSHeaders() });
+      } catch (err: any) {
+        console.error('Transcript fetch error:', err);
+        await sleep(1000);
+        const innerTube = await fetchViaInnerTube(videoId, lang).catch(() => null);
         if (!innerTube) {
           return Response.json(
             { error: 'レート制限により字幕を取得できませんでした。しばらく時間をおいてから再試行してください。' },
@@ -215,12 +229,6 @@ export default {
           );
         }
         return Response.json(innerTube, { headers: getCORSHeaders() });
-      } catch (err: any) {
-        console.error('Transcript fetch error:', err);
-        return Response.json(
-          { error: err.message || '字幕の取得に失敗しました' },
-          { status: 500, headers: getCORSHeaders() }
-        );
       }
     }
 
