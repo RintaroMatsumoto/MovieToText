@@ -1,6 +1,4 @@
-const API_BASE = window.location.hostname === 'localhost'
-  ? 'http://127.0.0.1:8787'
-  : 'https://movie-to-text-api.matsumotoinla.workers.dev';
+const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
 
 const elements = {
   urlInput: document.getElementById('url-input'),
@@ -78,25 +76,72 @@ function showResult() {
   elements.result.classList.remove('hidden');
 }
 
-function displayResult(data) {
-  transcriptData = data.transcript;
-  videoInfo = {
-    title: data.title || '不明',
-    channel: data.channel || '不明',
-    duration: data.duration || 0,
-  };
+function decodeEntities(text) {
+  const el = document.createElement('textarea');
+  el.innerHTML = text;
+  return el.value;
+}
 
-  elements.videoTitle.textContent = videoInfo.title;
-  elements.videoChannel.textContent = videoInfo.channel;
-  elements.videoDuration.textContent = formatTime(videoInfo.duration);
+function parseInlineJson(html, globalName) {
+  const startToken = `var ${globalName} = `;
+  const startIndex = html.indexOf(startToken);
+  if (startIndex === -1) return null;
 
-  const transcriptWithTimestamps = transcriptData
-    .map(item => `[${formatTime(item.offset)}] ${item.text}`)
-    .join('\n');
-  elements.transcriptText.textContent = transcriptWithTimestamps;
+  const jsonStart = startIndex + startToken.length;
+  let depth = 0;
+  for (let i = jsonStart; i < html.length; i++) {
+    if (html[i] === '{') depth++;
+    else if (html[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(jsonStart, i + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
 
-  const plainText = transcriptData.map(item => item.text).join(' ');
-  elements.summaryText.textContent = plainText;
+function parseTranscriptXml(xml) {
+  const results = [];
+
+  const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
+  let match;
+  while ((match = pRegex.exec(xml)) !== null) {
+    const startMs = parseInt(match[1], 10);
+    const durMs = parseInt(match[2], 10);
+    const inner = match[3];
+    let text = '';
+    const sRegex = /<s[^>]*>([^<]*)<\/s>/g;
+    let sMatch;
+    while ((sMatch = sRegex.exec(inner)) !== null) {
+      text += sMatch[1];
+    }
+    if (!text) {
+      text = inner.replace(/<[^>]+>/g, '');
+    }
+    text = decodeEntities(text).trim();
+    if (text) {
+      results.push({ text, duration: durMs, offset: startMs });
+    }
+  }
+  if (results.length > 0) return results;
+
+  const classicResults = [...xml.matchAll(/<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g)];
+  return classicResults.map((r) => ({
+    text: decodeEntities(r[3]),
+    duration: parseFloat(r[2]) * 1000,
+    offset: parseFloat(r[1]) * 1000,
+  }));
+}
+
+async function fetchWithProxy(url) {
+  const resp = await fetch(CORS_PROXY + encodeURIComponent(url));
+  if (!resp.ok) throw new Error(`取得に失敗しました (${resp.status})`);
+  return resp.text();
 }
 
 async function fetchTranscript() {
@@ -112,15 +157,58 @@ async function fetchTranscript() {
   elements.fetchBtn.disabled = true;
 
   try {
-    const apiUrl = `${API_BASE}/api/transcript?id=${videoId}`;
-    const response = await fetch(apiUrl);
-    const data = await response.json();
+    // Step 1: YouTubeページを取得
+    const html = await fetchWithProxy(`https://www.youtube.com/watch?v=${videoId}`);
 
-    if (!response.ok) {
-      throw new Error(data.error || '文字起こしの取得に失敗しました');
+    if (html.includes('class="g-recaptcha"')) {
+      throw new Error('YouTubeからのリクエストがブロックされました。しばらく待ってから再試行してください。');
     }
 
-    displayResult(data);
+    // Step 2: 動画情報と字幕URLを抽出
+    const playerResponse = parseInlineJson(html, 'ytInitialPlayerResponse');
+    if (!playerResponse) {
+      throw new Error('動画情報を取得できませんでした');
+    }
+
+    const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+    if (!Array.isArray(captionTracks) || captionTracks.length === 0) {
+      throw new Error('この動画には字幕がありません');
+    }
+
+    // Step 3: 日本語優先で字幕を選択
+    const track = captionTracks.find(t => t.languageCode === 'ja')
+      || captionTracks.find(t => t.languageCode?.startsWith('ja'))
+      || captionTracks[0];
+
+    // Step 4: 字幕XMLを取得
+    const captionXml = await fetchWithProxy(track.baseUrl);
+
+    // Step 5: パース
+    const transcript = parseTranscriptXml(captionXml);
+    if (!transcript.length) {
+      throw new Error('字幕データが空です');
+    }
+
+    // Step 6: 動画情報
+    const title = playerResponse?.videoDetails?.title || '不明';
+    const channel = playerResponse?.videoDetails?.author || '不明';
+    const duration = parseInt(playerResponse?.videoDetails?.lengthSeconds || '0', 10);
+
+    videoInfo = { title, channel, duration };
+    transcriptData = transcript;
+
+    elements.videoTitle.textContent = title;
+    elements.videoChannel.textContent = channel;
+    elements.videoDuration.textContent = formatTime(duration);
+
+    const transcriptWithTimestamps = transcript
+      .map(item => `[${formatTime(item.offset)}] ${item.text}`)
+      .join('\n');
+    elements.transcriptText.textContent = transcriptWithTimestamps;
+
+    const plainText = transcript.map(item => item.text).join(' ');
+    elements.summaryText.textContent = plainText;
+
     showResult();
   } catch (err) {
     showError(err.message);

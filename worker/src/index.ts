@@ -19,7 +19,7 @@ const RE_YOUTUBE = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36,gzip(gfe)';
 const RE_XML_TRANSCRIPT = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
 
-const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
+const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false&key=AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w';
 const INNERTUBE_CLIENT_VERSION = '20.10.38';
 const INNERTUBE_CONTEXT = {
   client: {
@@ -109,6 +109,8 @@ async function fetchViaInnerTube(videoId: string, lang?: string): Promise<Transc
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': INNERTUBE_USER_AGENT,
+        'X-YouTube-Client-Name': '3',
+        'X-YouTube-Client-Version': INNERTUBE_CLIENT_VERSION,
       },
       body: JSON.stringify({
         context: INNERTUBE_CONTEXT,
