@@ -32,11 +32,16 @@ body {
   padding: 40px 20px;
 }
 
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
 .lang-toggle {
   display: flex;
-  justify-content: flex-end;
   gap: 4px;
-  margin-bottom: 16px;
 }
 
 .lang-btn {
@@ -57,6 +62,19 @@ body {
 .lang-btn.active {
   color: var(--primary);
   border-color: var(--primary);
+}
+
+.visitor-badge {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 14px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 header {
